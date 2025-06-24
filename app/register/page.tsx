@@ -1,5 +1,5 @@
 "use client"
-
+import Image from "next/image"
 import type React from "react"
 
 import { useState } from "react"
@@ -76,110 +76,189 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="container flex h-screen w-screen flex-col items-center justify-center">
-      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-        <div className="flex flex-col space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
-          <p className="text-sm text-muted-foreground">Enter your email below to create your account</p>
-        </div>
+    <div className="bg-black text-white min-h-screen">
+      {/* Registration Section */}
+      <div className="container flex flex-col items-center justify-center px-4 py-8">
+        {/* Header */}
+        <header className="flex justify-center items-center mb-8">
+          <Image 
+            src="/Hackclubheader.png" 
+            alt="Header" 
+            width={600}
+            height={200}
+            className="max-w-full h-auto"
+          />
+        </header>
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {success && (
-          <Alert>
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        )}
-
-        <Card>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="pt-4">
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Register No.</Label>
-                  <Input
-                    id="regno"
-                    type="textl"
-                    placeholder="23Bxx1xxx/24xx1xxx"
-                    value={regno}
-                    onChange={(e) => setregno(e.target.value)}
-                    required
-                    disabled={isLoading}
-                    minLength={9}
-                    maxLength={9}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="name@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter password (min 6 characters)"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                    minLength={6}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="confirm-password">Confirm Password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                    minLength={6}
-                  />
-                </div>
+        {/* Progress Section */}
+        <div className="flex justify-center mb-8">
+          <div className="flex items-center space-x-6 md:space-x-10">
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-white text-black rounded-full flex items-center justify-center font-bold text-sm">
+                1
               </div>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Creating account..." : "Register"}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-
-        <div className="text-center text-sm">
-          Already have an account?{" "}
-          <Link href="/login" className="underline">
-            Login
-          </Link>
+              <span className="ml-2 text-white font-medium text-sm md:text-base">Account</span>
+            </div>
+            <div className="w-8 md:w-16 h-px bg-gray-600"></div>
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-gray-600 text-gray-400 rounded-full flex items-center justify-center font-bold text-sm">
+                2
+              </div>
+              <span className="ml-2 text-gray-400 font-medium text-sm md:text-base">Application</span>
+            </div>
+            <div className="w-8 md:w-16 h-px bg-gray-600"></div>
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-gray-600 text-gray-400 rounded-full flex items-center justify-center font-bold text-sm">
+                3
+              </div>
+              <span className="ml-2 text-gray-400 font-medium text-sm md:text-base">Submission</span>
+            </div>
+          </div>
         </div>
 
-        <div className="text-center text-xs text-muted-foreground">
-          <p>
-            By clicking register, you agree to our{" "}
-            <Link href="#" className="underline">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="#" className="underline">
-              Privacy Policy
+        {/* Registration Form */}
+        <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[400px] max-w-md">
+          <div className="flex flex-col space-y-2 text-center">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Create an account</h1>
+            <p className="text-sm text-gray-400">Enter your details below to create your account</p>
+          </div>
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {success && (
+            <Alert>
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+
+          <Card className="bg-gray-900 border-gray-700">
+            <form onSubmit={handleSubmit}>
+              <CardContent className="pt-6">
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="regno" className="text-white">Register No.</Label>
+                    <Input
+                      id="regno"
+                      type="text"
+                      placeholder="23Bxx1xxx/24xx1xxx"
+                      value={regno}
+                      onChange={(e) => setregno(e.target.value)}
+                      required
+                      disabled={isLoading}
+                      minLength={9}
+                      maxLength={9}
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="email" className="text-white">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="name@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={isLoading}
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="password" className="text-white">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter password (min 6 characters)"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={isLoading}
+                      minLength={6}
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="confirm-password" className="text-white">Confirm Password</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      placeholder="Confirm your password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      disabled={isLoading}
+                      minLength={6}
+                      className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button 
+                  type="submit" 
+                  className="w-full bg-white text-black hover:bg-gray-200" 
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Creating account..." : "Register"}
+                </Button>
+              </CardFooter>
+            </form>
+          </Card>
+
+          <div className="text-center text-sm text-gray-400">
+            Already have an account?{" "}
+            <Link href="/login" className="underline text-white hover:text-gray-300">
+              Login
             </Link>
-            .
-          </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Why Join Hackclub Section */}
+      <div className="py-12 px-4">
+        <div className="container mx-auto max-w-4xl">
+          {/* Main Title */}
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 text-white">
+            Why Join Hackclub?
+          </h2>
+          
+          {/* Three Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-8">
+            {/* Card 1 */}
+            <div className="bg-gray-900 p-4 lg:p-6 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+              <h3 className="text-lg font-bold mb-3 text-white">Learn by Building</h3>
+              <p className="text-gray-400 leading-relaxed">
+                Create real projects with mentorship from industry professionals and fellow hackers.
+              </p>
+            </div>
+            
+            {/* Card 2 */}
+            <div className="bg-gray-900 p-4 lg:p-6 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+              <h3 className="text-lg font-bold mb-3 text-white">Innovative Community</h3>
+              <p className="text-gray-400 leading-relaxed">
+                Connect with like-minded students passionate about technology and innovation.
+              </p>
+            </div>
+            
+            {/* Card 3 */}
+            <div className="bg-gray-900 p-4 lg:p-6 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+              <h3 className="text-lg font-bold mb-3 text-white">Launch Your Ideas</h3>
+              <p className="text-gray-400 leading-relaxed">
+                Get support to transform your ideas into reality through hackathons and workshops.
+              </p>
+            </div>
+          </div>
+          
+          {/* Footer */}
+          <div className="border-t border-gray-800 pt-6">
+            <p className="text-gray-400 text-center text-xs">
+              © 2025 Hack Club. All rights reserved.
+            </p>
+          </div>
         </div>
       </div>
     </div>
