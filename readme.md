@@ -21,10 +21,12 @@ A full-stack recruitment portal built with Next.js, Supabase, and TypeScript.
 
 ## Setup
 
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Copy `.env.example` to `.env.local` and fill in your Supabase credentials
-4. Run the development server: `npm run dev`
+- **Frontend**: Next.js 14 (App Router), React, TypeScript
+- **Styling**: Tailwind CSS, shadcn/ui components
+- **Backend**: Supabase (PostgreSQL, Authentication, Real-time)
+- **Database**: PostgreSQL with Row Level Security (RLS)
+- **Authentication**: Supabase Auth
+- **Deployment**: Vercel
 
 ## Environment Variables
 
@@ -39,18 +41,6 @@ The application uses the following main tables:
 - `departments`: Available departments
 - `recruiter_departments`: Department assignments for recruiters
 - `application_settings`: Global application settings
-
-## Deployment
-
-The application is ready for deployment on Vercel or any other Next.js hosting platform.
-
----
-
-**WEB DEV DEPT**
-\`\`\`bash
-git clone https://github.com/yourusername/recruitment-portal.git
-cd recruitment-portal
-\`\`\`
 
 ### 2. Install Dependencies
 
@@ -78,7 +68,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 \`\`\`sql
 -- Execute these scripts in your Supabase SQL editor
 -- 1. Run the complete setup script
--- (Copy and paste the content from scripts/fix-profiles-and-recruiters.sql)
+-- (Copy and paste the content from scripts/finalschema.sql)
 \`\`\`
 
 ### 5. Run the Development Server
@@ -139,32 +129,6 @@ The system uses Supabase Auth with role-based access control:
 4. **Make Decisions**: Shortlist, waitlist, or reject applications
 5. **Export Data**: Download application data as CSV
 
-## 🏗️ Project Structure
-
-\`\`\`
-recruitment-portal/
-├── app/                          # Next.js app directory
-│   ├── (authenticated)/          # Protected routes
-│   │   ├── application/          # Application submission
-│   │   ├── dashboard/            # User dashboards
-│   │   │   └── recruiter/        # Recruiter-specific pages
-│   │   └── profile/              # Profile management
-│   ├── login/                    # Authentication pages
-│   ├── register/
-│   └── globals.css               # Global styles
-├── components/                   # Reusable components
-│   ├── ui/                       # shadcn/ui components
-│   └── auth-layout.tsx           # Authentication layout
-├── contexts/                     # React contexts
-│   └── auth-context.tsx          # Authentication context
-├── lib/                          # Utility libraries
-│   └── supabase/                 # Supabase configuration
-│       ├── client.ts             # Client-side Supabase
-│       ├── server.ts             # Server-side Supabase
-│       └── data-fetching.ts      # Data access functions
-├── scripts/                      # Database scripts
-└── middleware.ts                 # Route protection middleware
-\`\`\`
 
 ## 🔧 Configuration
 
@@ -183,7 +147,7 @@ Key environment variables:
 
 ## 🚀 Deployment
 
-### Vercel (Recommended)
+### Vercel
 
 1. Push your code to GitHub
 2. Connect your repository to Vercel
@@ -236,32 +200,6 @@ When making database changes:
 - Add comments for complex logic
 - Test your changes thoroughly
 - Update documentation as needed
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Profile not created after signup**
-- Ensure the trigger function is properly set up in Supabase
-- Check if RLS policies allow profile creation
-
-**Role changes not reflecting**
-- Call `refreshUserRole()` from the auth context
-- Verify database permissions for role updates
-
-**Department assignments not working**
-- Ensure user has recruiter role
-- Check recruiter_departments table permissions
-
-### Getting Help
-
-1. Check the [Issues](https://github.com/yourusername/recruitment-portal/issues) page
-2. Review Supabase documentation
-3. Check Next.js documentation for framework-specific issues
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
