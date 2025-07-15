@@ -70,7 +70,7 @@ export async function middleware(request: NextRequest) {
             .eq("id", user.id)
             .single()
           
-          const role = profileData?.role || "applicant"
+          const role = profileData?.role;
           const redirectPath = role === "recruiter" ? "/dashboard/recruiter" : "/dashboard"
           return NextResponse.redirect(new URL(redirectPath, request.url))
         } catch (error) {
