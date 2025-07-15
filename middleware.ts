@@ -40,7 +40,22 @@ export async function middleware(request: NextRequest) {
         redirectUrl.searchParams.set("redirect", request.nextUrl.pathname)
         return NextResponse.redirect(redirectUrl)
       }
-
+      if(request.nextUrl.pathname.startsWith("/application")) {
+        try{
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          
+          if (profileData?.role !== "applicant") {
+            return NextResponse.redirect(new URL("/dashboard/recruiter", request.url))
+          }
+        } catch (error) {
+          console.error("Error checking role:", error)
+          return NextResponse.redirect(new URL("/dashboard", request.url))
+        }
+      }
       // Check for recruiter-only routes
       if (request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
         try {
