@@ -58,10 +58,10 @@ export default function LoginPage() {
         {/* Header */}
         <div className="text-center py-8">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-10 h-9 bg-white rounded-md flex items-center justify-center shadow-lg border border-gray-100">
-              <span className="text-red-500 font-bold text-3xl">h.</span>
-            </div>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-red-600 via-orange-500 to-purple-500 bg-clip-text text-transparent">
+             <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-2xl bg-gradient-to-r from-red-700 to-orange-600">
+                <span className="text-white font-black text-3xl">h.</span>
+              </div>
+            <h1 className="text-5xl font-black text-white">
               HackClub Recruitment
             </h1>
           </div>
@@ -183,12 +183,12 @@ export default function LoginPage() {
           height: 60vh;
           pointer-events: none;
           z-index: 1;
-          opacity: 0.38;
+          opacity: 0.32;
           filter: blur(60px) brightness(1.08);
           background: radial-gradient(
             ellipse 80% 80% at 50% 80%,
-            rgba(255,0,60,0.67) 0%,
-            rgba(255, 0, 60, 0.82) 20%,
+            rgba(255, 0, 60, 0.45) 0%,
+            rgba(255, 0, 60, 0.55) 20%,
             transparent 100%
           );
           border-radius: 60% 40% 60% 40% / 60% 60% 40% 40%;
