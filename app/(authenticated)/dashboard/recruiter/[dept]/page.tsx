@@ -63,7 +63,6 @@ export default function DepartmentPage() {
       try {
         const data = await getDepartmentApplicants(deptId)
         setApplicants(data)
-        console.log("Fetched applicants:", data)
       } catch (err) {
         console.error("Error fetching applicants:", err)
       } finally {

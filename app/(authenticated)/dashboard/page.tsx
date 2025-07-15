@@ -21,7 +21,6 @@ export default function ApplicantDashboard() {
           data: { session },
         } = await supabase.auth.getSession()
         if (!session) {
-          console.log("No active session found")
           setIsLoading(false)
           return
         }

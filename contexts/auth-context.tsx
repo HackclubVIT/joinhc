@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Session, User } from "@supabase/supabase-js"
@@ -20,12 +19,6 @@ type AuthContextType = {
   signOut: () => Promise<void>
 }
 
-interface RegisterFormData {
-  email: string
-  password: string
-  regno: string
-}
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -34,52 +27,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [userRole, setUserRole] = useState<UserRole | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isHydrated, setIsHydrated] = useState(false)
   const supabase = createClient()
 
-  // Function to fetch user role directly from the database
-  const fetchUserRole = async (userId: string, retries = 3) => {
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+
+  const fetchUserRole = async (userId: string) => {
     try {
-      console.log("Fetching role for user:", userId)
-      const { data, error } = await supabase.rpc("is_recruiter", { user_id: userId })
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single()
 
       if (error) {
-        console.error("Error checking if user is recruiter:", error)
-        if (retries > 0) {
-          setTimeout(() => fetchUserRole(userId, retries - 1), 1000)
-        } else {
-          setUserRole("applicant") // Default to applicant
-        }
-        return
+        console.error("Error fetching user role:", error)
+        setUserRole("applicant")
+        return "applicant"
       }
 
-      // Set role based on the is_recruiter function result
-      setUserRole(data ? "recruiter" : "applicant")
-      console.log("User role set to:", data ? "recruiter" : "applicant")
+      const role = data?.role || "applicant"
+      setUserRole(role)
+      return role
     } catch (err) {
       console.error("Error in fetchUserRole:", err)
-      if (retries > 0) {
-        setTimeout(() => fetchUserRole(userId, retries - 1), 1000)
-      } else {
-        setUserRole("applicant") // Default to applicant
-      }
+      setUserRole("applicant")
+      return "applicant"
     }
   }
 
-  // Function to refresh user role (can be called after role changes)
   const refreshUserRole = async () => {
     if (!user) return
-    await fetchUserRole(user.id, 0)
+    await fetchUserRole(user.id)
   }
 
   useEffect(() => {
-    const getSession = async () => {
-      setIsLoading(true)
+    if (!isHydrated) return
 
+    let mounted = true
+
+    const getSession = async () => {
       try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
+        const { data: { session }, error } = await supabase.auth.getSession()
+
+        if (!mounted) return
 
         if (error) {
           console.error("Error getting session:", error)
@@ -90,56 +83,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session) {
           setSession(session)
           setUser(session.user)
-
-          // Get user role from database
-          await fetchUserRole(session.user.id)
+          if (!userRole) {
+            await fetchUserRole(session.user.id)
+          }
         }
 
         setIsLoading(false)
       } catch (err) {
         console.error("Error in getSession:", err)
-        setIsLoading(false)
+        if (mounted) {
+          setIsLoading(false)
+        }
       }
     }
 
     getSession()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        setSession(session)
-        setUser(session.user)
-
-        // Get user role from database
-        await fetchUserRole(session.user.id)
-
-        // Redirect based on role after successful sign in
-        if (event === "SIGNED_IN") {
-          // Wait a bit for role to be set
-          setTimeout(async () => {
-            // Fetch the role again to make sure we have the latest
-            await fetchUserRole(session.user.id, 0)
-
-            // Use the role from state
-            if (userRole === "recruiter") {
-              router.push("/dashboard/recruiter")
-            } else {
-              router.push("/dashboard")
-            }
-          }, 1500)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return
+        
+        if (session) {
+          setSession(session)
+          setUser(session.user)
+          if (event === 'SIGNED_IN' && !userRole) {
+            const role = await fetchUserRole(session.user.id)
+            const redirectPath = role === "recruiter" ? "/dashboard/recruiter" : "/dashboard"
+            router.push(redirectPath)
+          }
+        } else {
+          setSession(null)
+          setUser(null)
+          setUserRole(null)
         }
-      } else {
-        setSession(null)
-        setUser(null)
-        setUserRole(null)
       }
-    })
+    )
 
     return () => {
+      mounted = false
       subscription.unsubscribe()
     }
-  }, [router, supabase])
+  }, [router, isHydrated, userRole])
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -147,7 +131,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password,
       })
-
       return { error }
     } catch (err) {
       console.error("Error in signIn:", err)
@@ -161,14 +144,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password,
         options: {
+          emailRedirectTo: `https://join.hackclubvit.xyz/auth/callback`,
           data: {
-            full_name: email.split("@")[0], // Use email prefix as display name
-            role: "applicant", // Set default role in user metadata
+            full_name: email.split("@")[0],
+            role: "applicant",
             register_no: regno
           },
         },
       })
-
       return { data, error }
     } catch (err) {
       console.error("Error in signUp:", err)
@@ -177,11 +160,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setSession(null)
-    setUserRole(null)
-    router.push("/")
+    try {
+      setUser(null)
+      setSession(null)
+      setUserRole(null)
+      await supabase.auth.signOut()
+      router.push("/")
+    } catch (err) {
+      console.error("Error in signOut:", err)
+    }
   }
 
   const value = {

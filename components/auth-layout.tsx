@@ -4,7 +4,7 @@ import type React from "react"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LogOut, User } from "lucide-react"
+import { LogOut, User, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -61,9 +61,9 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             </nav>
           </div>
           <div className="flex items-center gap-4">
-            <span className="hidden rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary md:block">
+            {userRole && <span className="hidden rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary md:block">
               {userRole}
-            </span>
+            </span>}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
@@ -75,7 +75,16 @@ export function AuthLayout({ children }: AuthLayoutProps) {
                 <DropdownMenuItem className="md:hidden">{userRole}</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/profile">Profile</Link>
+                  <Link href="/profile">
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/profile/settings">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => signOut()}>
                   <LogOut className="mr-2 h-4 w-4" />
