@@ -19,7 +19,7 @@ import {
   saveApplication,
   getApplicationSettings,
   type Application,
-  type Department, // <-- import Department type
+  type Department,
 } from "@/lib/supabase/data-fetching"
 
 export default function ApplicationPage() {

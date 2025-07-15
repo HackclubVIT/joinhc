@@ -1,52 +1,52 @@
 # Recruitment Portal
 
-A comprehensive full-stack recruitment management system built with Next.js, Supabase, and TypeScript. This portal facilitates the entire recruitment process from application submission to candidate evaluation and selection.
+A full-stack recruitment portal built with Next.js, Supabase, and TypeScript.
 
-## 🚀 Features
+## Features
 
-### For Applicants
-- **User Registration & Authentication** - Secure signup/login with email verification
-- **Application Submission** - Submit applications with department preferences and supporting documents
-- **Application Tracking** - Real-time status updates on application progress
-- **Profile Management** - Manage personal information and application details
-- **Department Preferences** - Select first and second choice departments with detailed reasoning
+- User authentication and authorization
+- Role-based access control (Applicant/Recruiter)
+- Application submission and management
+- Department preferences
+- Application status tracking
+- Export functionality for recruiters
 
-### For Recruiters
-- **Recruiter Dashboard** - Comprehensive overview of assigned departments and applications
-- **Application Management** - Review, shortlist, waitlist, or reject applications
-- **Department Assignment** - Assign recruiters to specific departments
-- **User Role Management** - Promote applicants to recruiters and manage permissions
-- **Export Functionality** - Export application data to CSV for external analysis
-- **Detailed Application View** - Access complete applicant information including portfolios and reasoning
+## Tech Stack
 
-### System Features
-- **Role-Based Access Control** - Secure access based on user roles (applicant/recruiter)
-- **Real-time Updates** - Live application status updates
-- **Responsive Design** - Mobile-friendly interface using Tailwind CSS
-- **Data Export** - CSV export functionality for application data
-- **Application Deadlines** - Configurable application deadlines with automatic enforcement
+- **Framework:** Next.js 14 with App Router
+- **Database:** Supabase (PostgreSQL)
+- **Authentication:** Supabase Auth
+- **UI:** Tailwind CSS + shadcn/ui
+- **Language:** TypeScript
 
-## 🛠️ Tech Stack
+## Setup
 
-- **Frontend**: Next.js 14 (App Router), React, TypeScript
-- **Styling**: Tailwind CSS, shadcn/ui components
-- **Backend**: Supabase (PostgreSQL, Authentication, Real-time)
-- **Database**: PostgreSQL with Row Level Security (RLS)
-- **Authentication**: Supabase Auth
-- **Deployment**: Vercel (recommended)
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Copy `.env.example` to `.env.local` and fill in your Supabase credentials
+4. Run the development server: `npm run dev`
 
-## 📋 Prerequisites
+## Environment Variables
 
-Before you begin, ensure you have the following installed:
-- Node.js 18+ 
-- npm or yarn
-- A Supabase account
-- Git
+- `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
 
-## 🚀 Installation & Setup
+## Database Schema
 
-### 1. Clone the Repository
+The application uses the following main tables:
+- `profiles`: User profiles with roles
+- `applications`: Application submissions
+- `departments`: Available departments
+- `recruiter_departments`: Department assignments for recruiters
+- `application_settings`: Global application settings
 
+## Deployment
+
+The application is ready for deployment on Vercel or any other Next.js hosting platform.
+
+---
+
+**WEB DEV DEPT**
 \`\`\`bash
 git clone https://github.com/yourusername/recruitment-portal.git
 cd recruitment-portal

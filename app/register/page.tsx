@@ -10,9 +10,6 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/contexts/auth-context"
-import { register } from "module"
-
-
 
 export default function RegisterPage() {
   const { signUp } = useAuth()

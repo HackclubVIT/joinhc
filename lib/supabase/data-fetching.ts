@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
 
-// Type definitions matching your database schema
+
 export type Application = {
   id: string
   name: string
@@ -51,7 +51,7 @@ export type ApplicationSettings = {
   updated_at: string
 }
 
-// Helper function to get current user
+
 async function getCurrentUser() {
   const supabase = createClient()
   const {
@@ -67,7 +67,7 @@ async function getCurrentUser() {
   return user
 }
 
-// Data fetching functions
+
 export async function getApplicationForUser() {
   const supabase = createClient()
 
@@ -115,7 +115,6 @@ export async function saveApplication(applicationData: {
     const user = await getCurrentUser()
     if (!user) throw new Error("User not authenticated")
 
-    // Check if application already exists
     const { data: existingApp } = await supabase.from("applications").select("id").eq("applicant_id", user.id).single()
 
     const dataToSave = {
@@ -125,7 +124,6 @@ export async function saveApplication(applicationData: {
     }
 
     if (existingApp) {
-      // Update existing application
       const { data, error } = await supabase
         .from("applications")
         .update(dataToSave)
@@ -140,7 +138,6 @@ export async function saveApplication(applicationData: {
 
       return data
     } else {
-      // Insert new application
       const { data, error } = await supabase.from("applications").insert(dataToSave).select().single()
 
       if (error) {
@@ -228,7 +225,7 @@ export async function getDepartments() {
   }
 }
 
-// Updated to work with recruiter_id based recruiter departments
+
 export async function getRecruiterDepartments(userId?: string) {
   const supabase = createClient()
 
@@ -260,12 +257,12 @@ export async function getRecruiterDepartments(userId?: string) {
   }
 }
 
-// New function to assign department to recruiter
+
 export async function assignDepartmentToRecruiter(recruiterId: string, departmentId: string) {
   const supabase = createClient()
 
   try {
-    // Check if user is a recruiter or admin
+    
     const isAdmin = await isCurrentUserRecruiter()
     if (!isAdmin) {
       throw new Error("Only recruiters can assign departments")
@@ -292,12 +289,12 @@ export async function assignDepartmentToRecruiter(recruiterId: string, departmen
   }
 }
 
-// New function to remove department assignment
+
 export async function removeDepartmentFromRecruiter(assignmentId: string) {
   const supabase = createClient()
 
   try {
-    // Check if user is a recruiter or admin
+    
     const isAdmin = await isCurrentUserRecruiter()
     if (!isAdmin) {
       throw new Error("Only recruiters can remove department assignments")
@@ -317,12 +314,12 @@ export async function removeDepartmentFromRecruiter(assignmentId: string) {
   }
 }
 
-// New function to get all recruiters
+
 export async function getAllRecruiters() {
   const supabase = createClient()
 
   try {
-    // Check if user is a recruiter or admin
+    
     const isAdmin = await isCurrentUserRecruiter()
     if (!isAdmin) {
       throw new Error("Only recruiters can view all recruiters")
@@ -346,12 +343,12 @@ export async function getAllRecruiters() {
   }
 }
 
-// New function to get all users for admin purposes
+
 export async function getAllUsers() {
   const supabase = createClient()
 
   try {
-    // Check if user is a recruiter or admin
+    
     const isAdmin = await isCurrentUserRecruiter()
     if (!isAdmin) {
       throw new Error("Only recruiters can view all users")
@@ -375,12 +372,12 @@ export async function getAllUsers() {
   }
 }
 
-// Updated function to update user role
+
 export async function updateUserRole(userId: string, newRole: "applicant" | "recruiter") {
   const supabase = createClient()
 
   try {
-    // Check if user is a recruiter or admin
+    
     const isAdmin = await isCurrentUserRecruiter()
     if (!isAdmin) {
       throw new Error("Only recruiters can update user roles")
@@ -406,21 +403,22 @@ export async function updateUserRole(userId: string, newRole: "applicant" | "rec
 export async function getDepartmentApplicants(departmentId: string) {
   const supabase = createClient()
 
-  // Normalize departmentId: remove spaces, convert to lowercase, add hyphens if needed
   function normalizeUuid(str: string) {
     const cleaned = str.replace(/\s+/g, "").toLowerCase()
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(cleaned)) {
       return cleaned
     }
-    // Try to insert hyphens if missing (32 chars)
+    
     if (/^[0-9a-f]{32}$/.test(cleaned)) {
       return `${cleaned.slice(0,8)}-${cleaned.slice(8,12)}-${cleaned.slice(12,16)}-${cleaned.slice(16,20)}-${cleaned.slice(20)}`
     }
-    return str // fallback
+    return str 
   }
+  
   function isUuid(str: string) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str)
   }
+  
   const normalizedId = normalizeUuid(departmentId)
   if (!isUuid(normalizedId)) {
     console.error("Invalid departmentId passed to getDepartmentApplicants:", departmentId)
@@ -522,7 +520,7 @@ export async function getAllApplicationsForExport(departmentId?: string) {
   }
 }
 
-// Helper function to check if current user is a recruiter
+
 export async function isCurrentUserRecruiter() {
   const supabase = createClient()
 
@@ -530,21 +528,25 @@ export async function isCurrentUserRecruiter() {
     const user = await getCurrentUser()
     if (!user) return false
 
-    const { data, error } = await supabase.rpc("is_recruiter", { user_id: user.id })
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
 
     if (error) {
       console.error("Error checking if user is recruiter:", error)
       return false
     }
 
-    return data
+    return data?.role === "recruiter"
   } catch (err) {
     console.error("Error in isCurrentUserRecruiter:", err)
     return false
   }
 }
 
-// Fetch department name by department id
+
 export async function getDepartmentNameById(departmentId: string): Promise<string | null> {
   const supabase = createClient()
   try {
@@ -561,5 +563,110 @@ export async function getDepartmentNameById(departmentId: string): Promise<strin
   } catch (err) {
     console.error("Error in getDepartmentNameById:", err)
     return null
+  }
+}
+
+export async function changePassword(newPassword: string) {
+  const supabase = createClient()
+  try {
+    const sessionPromise = supabase.auth.getSession()
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Session check timeout")), 10000)
+    )
+    
+    const { data: { session }, error: sessionError } = await Promise.race([
+      sessionPromise,
+      timeoutPromise
+    ]) as any
+    
+    if (sessionError) {
+      console.error("Session error:", sessionError)
+      return { error: { message: "Session error. Please try again." } }
+    }
+
+    if (!session || !session.user) {
+      console.error("No active session found")
+      return { error: { message: "No active session. Please try again." } }
+    }
+    
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    })
+
+    if (error) {
+      console.error("Supabase password update error:", error)
+      return { error: { message: error.message || "Failed to update password" } }
+    }
+    return { error: null }
+  } catch (err: any) {
+    console.error("Unexpected error in changePassword:", err)
+    if (err.message === "Session check timeout") {
+      return { error: { message: "Session check timed out. Please refresh the page and try again." } }
+    }
+    return { error: { message: "An unexpected error occurred" } }
+  }
+}
+
+export async function resetPassword(email: string) {
+  const supabase = createClient()
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `https://join.hackclubvit.xyz/auth/callback`
+    })
+
+    if (error) {
+      console.error("Error sending reset password email:", error)
+      return { error }
+    }
+
+    return { error: null }
+  } catch (err) {
+    console.error("Error sending reset password email:", err)
+    return { error: err }
+  }
+}
+
+export async function magicLinkLogin(email: string) {
+  const supabase = createClient()
+
+  try {
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email: email,
+      options: {
+        shouldCreateUser: false
+      }
+    })
+
+    if (error) {
+      console.error("Error sending magic link:", error)
+      return { error }
+    }
+    return { data, error: null }
+  } catch (err) {
+    console.error("Error sending magic link:", err)
+    return { error: err }
+  }
+}
+
+// Add a new function for PKCE flow (if you want to use it)
+export async function verifyTokenHash(tokenHash: string, type: string) {
+  const supabase = createClient()
+
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type as any
+    })
+
+    if (error) {
+      console.error("Error verifying token hash:", error)
+      return { error }
+    }
+
+    return { data, error: null }
+  } catch (err) {
+    console.error("Error verifying token hash:", err)
+    return { error: err }
   }
 }
