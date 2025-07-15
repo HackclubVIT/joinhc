@@ -40,7 +40,7 @@ export default function DepartmentPage() {
   const [preferenceFilter, setPreferenceFilter] = useState("all")
   const [applicants, setApplicants] = useState<Application[]>([])
   const [filteredApplicants, setFilteredApplicants] = useState<Application[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)

@@ -26,7 +26,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background">
+      <header className="sticky top-0 z-20 border-b bg-background">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href={userRole === "recruiter" ? "/dashboard/recruiter" : "/dashboard"} className="text-xl font-bold">

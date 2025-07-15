@@ -152,20 +152,35 @@ export default function ApplicationPage() {
   }
 
   return (
-    <div className="bg-black text-white min-h-screen">
-     
+    <div className="relative min-h-screen text-white overflow-hidden bottom-bg">
+      {/* Animated morphing red blob at the bottom edge */}
+      <div className="bottom-red-blob"></div>
+
+      {/* Stars */}
+      {Array.from({ length: 60 }).map((_, i) => (
+        <div
+          key={i}
+          className="star"
+          style={{
+            top: `${Math.random() * 100}vh`,
+            left: `${Math.random() * 100}vw`,
+            animationDelay: `${Math.random() * 10}s`,
+          }}
+        />
+      ))}
 
       {/* Application Section */}
-      <div className="container flex flex-col items-center justify-center px-4 py-8 max-w-4xl mx-auto">
+      <div className="container flex flex-col items-center justify-center px-4 py-8 max-w-4xl mx-auto relative z-10">
         {/* Header */}
         <header className="flex justify-center items-center mb-8">
-          <Image 
-            src="/Hackclubheader.png" 
-            alt="Header" 
-            width={600}
-            height={200}
-            className="max-w-full h-auto"
-          />
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="w-10 h-9 bg-white rounded-md flex items-center justify-center shadow-lg border border-gray-100">
+              <span className="text-red-500 font-bold text-3xl">h.</span>
+            </div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-red-600 via-orange-500 to-purple-500 bg-clip-text text-transparent">
+              HackClub Recruitment
+            </h1>
+          </div>
         </header>
 
         {/* Progress Section */}
@@ -197,13 +212,13 @@ export default function ApplicationPage() {
         {/* Title Section */}
         <div className="flex flex-col space-y-2 text-center mb-8">
           <h1 className="text-3xl font-bold text-white">Application Form</h1>
-          <p className="text-gray-400">
+          <p className="text-gray-200">
             {existingApplication
               ? "Update your application details below."
               : "Please fill out the form below to submit your application."}
           </p>
           {deadline && (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-200">
               Application deadline: {deadline.toLocaleDateString()} at {deadline.toLocaleTimeString()}
             </p>
           )}
@@ -211,33 +226,33 @@ export default function ApplicationPage() {
 
         {/* Alerts */}
         {deadlinePassed && (
-          <Alert variant="destructive" className="mb-6 bg-red-900 border-red-800 text-red-100">
+          <Alert variant="destructive" className="mb-6 bg-red-900/20 border-red-500/50 backdrop-blur-sm">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Application Closed</AlertTitle>
-            <AlertDescription>
+            <AlertTitle className="text-red-200">Application Closed</AlertTitle>
+            <AlertDescription className="text-red-200">
               The application deadline has passed. You can no longer submit or edit your application.
             </AlertDescription>
           </Alert>
         )}
 
         {error && (
-          <Alert variant="destructive" className="mb-6 bg-red-900 border-red-800 text-red-100">
+          <Alert variant="destructive" className="mb-6 bg-red-900/20 border-red-500/50 backdrop-blur-sm">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="text-red-200">{error}</AlertDescription>
           </Alert>
         )}
 
         {success && (
-          <Alert className="mb-6 bg-green-900 border-green-800 text-green-100">
+          <Alert className="mb-6 bg-green-900/20 border-green-500/50 backdrop-blur-sm">
             <CheckCircle className="h-4 w-4" />
-            <AlertDescription>{success}</AlertDescription>
+            <AlertDescription className="text-green-200">{success}</AlertDescription>
           </Alert>
         )}
 
         {/* Application Form */}
         <form onSubmit={handleSubmit} className="w-full max-w-2xl">
           {/* Personal Information Card */}
-          <Card className="mb-6 bg-gray-900/50 border-gray-700 backdrop-blur-sm">
+          <Card className="mb-6 bg-black/20 border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:transform hover:scale-105 hover:shadow-2xl">
             <CardHeader>
               <CardTitle className="text-white">Personal Information</CardTitle>
               <CardDescription className="text-gray-400">Please provide your personal details</CardDescription>
@@ -253,7 +268,7 @@ export default function ApplicationPage() {
                     onChange={handleChange}
                     required
                     disabled={true}
-                    className="bg-white border-gray-300 text-black placeholder-gray-500 disabled:bg-gray-100 disabled:text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                    className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg disabled:bg-black/10 disabled:text-gray-300"
                   />
                 </div>
                 <div className="space-y-2">
@@ -266,7 +281,7 @@ export default function ApplicationPage() {
                     onChange={handleChange}
                     required
                     disabled={true}
-                    className="bg-white border-gray-300 text-black placeholder-gray-500 disabled:bg-gray-100 disabled:text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                    className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg disabled:bg-black/10 disabled:text-gray-300"
                   />
                 </div>
               </div>
@@ -279,14 +294,14 @@ export default function ApplicationPage() {
                   onChange={handleChange}
                   required
                   disabled={true}
-                  className="bg-white border-gray-300 text-black placeholder-gray-500 disabled:bg-gray-100 disabled:text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                  className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg disabled:bg-black/10 disabled:text-gray-300"
                 />
               </div>
             </CardContent>
           </Card>
 
           {/* Department Preferences Card */}
-          <Card className="mb-6 bg-gray-900/50 border-gray-700 backdrop-blur-sm">
+          <Card className="mb-6 bg-black/20 border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:transform hover:scale-105 hover:shadow-2xl">
             <CardHeader>
               <CardTitle className="text-white">Department Preferences</CardTitle>
               <CardDescription className="text-gray-400">Select your preferred departments and provide reasons</CardDescription>
@@ -300,12 +315,12 @@ export default function ApplicationPage() {
                     onValueChange={(value) => handleSelectChange("dept_first_pref", value)}
                     value={formData.dept_first_pref}
                   >
-                    <SelectTrigger className="bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500">
+                    <SelectTrigger className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg">
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-gray-300">
+                    <SelectContent className="bg-black/90 border-gray-600/50 backdrop-blur-sm">
                       {DEPARTMENTS.map((dept) => (
-                        <SelectItem key={dept.id} value={dept.id} className="text-black hover:bg-gray-100">
+                        <SelectItem key={dept.id} value={dept.id} className="text-white hover:bg-gray-800 focus:bg-gray-800">
                           {dept.name}
                         </SelectItem>
                       ))}
@@ -323,7 +338,7 @@ export default function ApplicationPage() {
                     required
                     disabled={deadlinePassed}
                     placeholder="Explain why this is your first choice..."
-                    className="bg-white border-gray-300 text-black placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 resize-none"
+                    className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg resize-none"
                   />
                 </div>
               </div>
@@ -336,12 +351,12 @@ export default function ApplicationPage() {
                     onValueChange={(value) => handleSelectChange("dept_second_pref", value)}
                     value={formData.dept_second_pref}
                   >
-                    <SelectTrigger className="bg-white border-gray-300 text-black focus:border-blue-500 focus:ring-blue-500">
+                    <SelectTrigger className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg">
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-gray-300">
+                    <SelectContent className="bg-black/90 border-gray-600/50 backdrop-blur-sm">
                       {DEPARTMENTS.filter((dept) => dept.id !== formData.dept_first_pref).map((dept) => (
-                        <SelectItem key={dept.id} value={dept.id} className="text-black hover:bg-gray-100">
+                        <SelectItem key={dept.id} value={dept.id} className="text-white hover:bg-gray-800 focus:bg-gray-800">
                           {dept.name}
                         </SelectItem>
                       ))}
@@ -359,7 +374,7 @@ export default function ApplicationPage() {
                     required
                     disabled={deadlinePassed}
                     placeholder="Explain why this is your second choice..."
-                    className="bg-white border-gray-300 text-black placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 resize-none"
+                    className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg resize-none"
                   />
                 </div>
               </div>
@@ -375,14 +390,14 @@ export default function ApplicationPage() {
                   required
                   disabled={deadlinePassed}
                   placeholder="Explain why you prioritized your preferences in this order..."
-                  className="bg-white border-gray-300 text-black placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 resize-none"
+                  className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg resize-none"
                 />
               </div>
             </CardContent>
           </Card>
 
           {/* Additional Information Card */}
-          <Card className="mb-6 bg-gray-900/50 border-gray-700 backdrop-blur-sm">
+          <Card className="mb-6 bg-black/20 border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:transform hover:scale-105 hover:shadow-2xl">
             <CardHeader>
               <CardTitle className="text-white">Additional Information</CardTitle>
               <CardDescription className="text-gray-400">Provide links to your portfolio, resume, or GitHub</CardDescription>
@@ -398,7 +413,7 @@ export default function ApplicationPage() {
                   placeholder="https://portfolio.com&#10;https://github.com/username&#10;https://resume-link.com"
                   disabled={deadlinePassed}
                   rows={3}
-                  className="bg-white border-gray-300 text-black placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 resize-none"
+                  className="bg-black/20 border-gray-600/50 text-white placeholder-gray-400 backdrop-blur-sm focus:border-white/50 focus:bg-black/30 transition-all duration-300 focus:transform focus:scale-105 focus:shadow-lg resize-none"
                 />
                 <p className="text-xs text-gray-400">You can add multiple links, one per line</p>
               </div>
@@ -406,7 +421,7 @@ export default function ApplicationPage() {
             <CardFooter>
               <Button 
                 type="submit" 
-                className="w-full bg-blue-600 text-white hover:bg-blue-700 font-medium py-2.5 transition-all duration-200 shadow-lg hover:shadow-xl disabled:bg-gray-500 disabled:cursor-not-allowed" 
+                className="w-full bg-white text-black hover:bg-gray-200 transition-all duration-300 hover:scale-105 font-medium py-2.5 shadow-lg hover:shadow-xl disabled:bg-gray-500 disabled:cursor-not-allowed" 
                 disabled={isSubmitting || deadlinePassed}
               >
                 {isSubmitting
@@ -425,43 +440,103 @@ export default function ApplicationPage() {
       </div>
 
       {/* Why Join Hackclub Section */}
-      <div className="border-t border-gray-800 py-16 px-4">
+      <div className="border-t border-gray-800 py-16 px-4 relative z-10">
         <div className="container mx-auto max-w-6xl">
-          {/* Main Title */}
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-center mb-12 text-white">
             Why Join Hackclub?
           </h1>
-          
-          {/* Three Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 mb-12">
-            {/* Card 1 */}
-            <div className="bg-gray-900/50 backdrop-blur-sm p-6 lg:p-8 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-900/70 transition-all duration-300 group">
+            <div className="bg-black/20 backdrop-blur-sm p-6 lg:p-8 rounded-lg border border-gray-700/50 hover:border-gray-600/70 hover:bg-black/30 transition-all duration-300 group">
               <h2 className="text-xl font-bold mb-4 text-white group-hover:text-blue-400 transition-colors">Learn by Building</h2>
               <p className="text-gray-400 leading-relaxed">
                 Create real projects with mentorship from industry professionals and fellow hackers.
               </p>
             </div>
-            
-            {/* Card 2 */}
-            <div className="bg-gray-900/50 backdrop-blur-sm p-6 lg:p-8 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-900/70 transition-all duration-300 group">
+            <div className="bg-black/20 backdrop-blur-sm p-6 lg:p-8 rounded-lg border border-gray-700/50 hover:border-gray-600/70 hover:bg-black/30 transition-all duration-300 group">
               <h2 className="text-xl font-bold mb-4 text-white group-hover:text-purple-400 transition-colors">Innovative Community</h2>
               <p className="text-gray-400 leading-relaxed">
                 Connect with like-minded students passionate about technology and innovation.
               </p>
             </div>
-            
-            {/* Card 3 */}
-            <div className="bg-gray-900/50 backdrop-blur-sm p-6 lg:p-8 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-900/70 transition-all duration-300 group">
+            <div className="bg-black/20 backdrop-blur-sm p-6 lg:p-8 rounded-lg border border-gray-700/50 hover:border-gray-600/70 hover:bg-black/30 transition-all duration-300 group">
               <h2 className="text-xl font-bold mb-4 text-white group-hover:text-green-400 transition-colors">Launch Your Ideas</h2>
               <p className="text-gray-400 leading-relaxed">
                 Get support to transform your ideas into reality through hackathons and workshops.
               </p>
             </div>
           </div>
-          
-          
+          <div className="border-t border-gray-800 pt-6">
+            <p className="text-gray-400 text-center text-xs">
+              © 2025 Hack Club. All rights reserved.
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* Styles for background, moving red blob at bottom edge, and stars */}
+      <style jsx global>{`
+        .bottom-bg {
+          background: #000;
+        }
+        .bottom-red-blob {
+          position: fixed;
+          left: 50%;
+          bottom: -18vh;
+          width: 140vw;
+          height: 60vh;
+          pointer-events: none;
+          z-index: 1;
+          opacity: 0.38;
+          filter: blur(60px) brightness(1.08);
+          background: radial-gradient(
+            ellipse 80% 80% at 50% 80%,
+            rgba(255,0,60,0.67) 0%,
+            rgba(255, 0, 60, 0.82) 20%,
+            transparent 100%
+          );
+          border-radius: 60% 40% 60% 40% / 60% 60% 40% 40%;
+          animation: bottomBlobMove 18s ease-in-out infinite alternate;
+          transform: translateX(-50%) scale(1) rotate(0deg);
+        }
+        @keyframes bottomBlobMove {
+          0% {
+            transform: translateX(-50%) scale(1) rotate(0deg);
+            border-radius: 60% 40% 60% 40% / 60% 60% 40% 40%;
+          }
+          30% {
+            transform: translateX(-52%) scale(1.08) rotate(-7deg);
+            border-radius: 70% 30% 60% 40% / 60% 40% 60% 40%;
+          }
+          60% {
+            transform: translateX(-48%) scale(1.12) rotate(8deg);
+            border-radius: 60% 40% 70% 30% / 50% 60% 50% 60%;
+          }
+          100% {
+            transform: translateX(-50%) scale(1) rotate(0deg);
+            border-radius: 60% 40% 60% 40% / 60% 60% 40% 40%;
+          }
+        }
+        .star {
+          position: absolute;
+          width: 2px;
+          height: 2px;
+          background: white;
+          border-radius: 100%;
+          animation: moveStars 10s linear infinite;
+          opacity: 0.8;
+          z-index: 2;
+        }
+        @keyframes moveStars {
+          0% {
+            transform: translateY(0) translateX(0);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(100vh) translateX(20px);
+            opacity: 0;
+          }
+        }
+      `}</style>
     </div>
   )
 }
