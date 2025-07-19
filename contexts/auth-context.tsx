@@ -144,7 +144,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password,
         options: {
-          emailRedirectTo: `https://join.hackclubvit.xyz/auth/callback`,
           data: {
             full_name: email.split("@")[0],
             role: "applicant",
