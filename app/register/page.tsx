@@ -1,85 +1,103 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Mail, Lock, ArrowLeft, Hash, ChevronRight, CheckCircle } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
-import { HackClubLogo } from "@/components/hackclub-logo"
+import type React from "react";
+import { useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  ArrowLeft,
+  Hash,
+  ChevronRight,
+  CheckCircle,
+} from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { HackClubLogo } from "@/components/hackclub-logo";
 
 export default function RegisterPage() {
-  const { signUp } = useAuth()
-  const [regno, setregno] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const { signUp } = useAuth();
+  const [regno, setregno] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setSuccess(null)
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match")
-      return
+      setError("Passwords do not match");
+      return;
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters long")
-      return
+      setError("Password must be at least 6 characters long");
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
-      const { data, error } = await signUp(email, password, regno)
+      const { data, error } = await signUp(email, password, regno);
 
       if (error) {
         if (error.message.includes("User already registered")) {
-          setError("An account with this email already exists. Please try logging in instead.")
+          setError(
+            "An account with this email already exists. Please try logging in instead.",
+          );
         } else if (error.message.includes("Invalid email")) {
-          setError("Please enter a valid email address.")
+          setError("Please enter a valid email address.");
         } else if (error.message.includes("Password")) {
-          setError("Password must be at least 6 characters long.")
+          setError("Password must be at least 6 characters long.");
         } else {
-          setError(error.message || "Failed to create account. Please try again.")
+          setError(
+            error.message || "Failed to create account. Please try again.",
+          );
         }
       } else if (data.user) {
         if (data.user.email_confirmed_at) {
-          setSuccess("Account created successfully! You can now log in.")
+          setSuccess("Account created successfully! You can now log in.");
         } else {
-          setSuccess("Account created! Please check your email to verify your account before logging in.")
+          setSuccess(
+            "Account created! Please check your email to verify your account before logging in.",
+          );
         }
 
-        setEmail("")
-        setPassword("")
-        setConfirmPassword("")
-        setregno("")
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+        setregno("");
       }
     } catch (err: any) {
-      console.error("Signup error:", err)
-      setError("An unexpected error occurred. Please try again.")
+      console.error("Signup error:", err);
+      setError("An unexpected error occurred. Please try again.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const getPasswordStrength = (password: string) => {
-    if (password.length < 6) return { strength: 0, text: "Too short", color: "bg-red-500" }
-    if (password.length < 8) return { strength: 33, text: "Weak", color: "bg-yellow-500" }
-    if (password.length < 12) return { strength: 66, text: "Good", color: "bg-blue-500" }
-    return { strength: 100, text: "Strong", color: "bg-green-500" }
-  }
+    if (password.length < 6)
+      return { strength: 0, text: "Too short", color: "bg-red-500" };
+    if (password.length < 8)
+      return { strength: 33, text: "Weak", color: "bg-yellow-500" };
+    if (password.length < 12)
+      return { strength: 66, text: "Good", color: "bg-blue-500" };
+    return { strength: 100, text: "Strong", color: "bg-green-500" };
+  };
 
-  const passwordStrength = getPasswordStrength(password)
+  const passwordStrength = getPasswordStrength(password);
 
   return (
     <div className="min-h-screen hackclub-bg flex">
@@ -94,10 +112,11 @@ export default function RegisterPage() {
               HackClub <span className="text-primary">Recruitment</span>
             </h1>
             <p className="text-xl text-gray-300 leading-relaxed">
-              Join our community of coders, makers, and creators building the tech future
+              Join our community of coders, makers, and creators building the
+              tech future
             </p>
           </div>
-          
+
           {/* Progress Steps */}
           <div className="flex items-center justify-center space-x-8 py-8">
             <div className="flex flex-col items-center">
@@ -145,15 +164,22 @@ export default function RegisterPage() {
         <div className="w-full max-w-md space-y-8">
           {/* Header */}
           <div className="text-center space-y-2">
-            <Link href="/" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-6 transition-colors">
+            <Link
+              href="/"
+              className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-6 transition-colors"
+            >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Home
             </Link>
             <div className="flex justify-center mb-4">
               <HackClubLogo size="md" showText={false} />
             </div>
-            <h2 className="text-3xl font-bold text-foreground">Create Account</h2>
-            <p className="text-muted-foreground">Join our community of developers</p>
+            <h2 className="text-3xl font-bold text-foreground">
+              Create Account
+            </h2>
+            <p className="text-muted-foreground">
+              Join our community of developers
+            </p>
           </div>
 
           {error && (
@@ -172,15 +198,24 @@ export default function RegisterPage() {
           <div className="hackclub-card">
             <div className="p-6 space-y-1 border-b border-border">
               <div className="text-center">
-                <h3 className="text-xl font-semibold text-foreground">Create Account</h3>
-                <p className="text-sm text-muted-foreground">Join our community of developers</p>
+                <h3 className="text-xl font-semibold text-foreground">
+                  Create Account
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Join our community of developers
+                </p>
               </div>
             </div>
-            
+
             <form onSubmit={handleSubmit}>
               <div className="p-6 space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="regno" className="text-sm font-medium text-gray-200">Register Number</Label>
+                  <Label
+                    htmlFor="regno"
+                    className="text-sm font-medium text-gray-200"
+                  >
+                    Register Number
+                  </Label>
                   <div className="relative">
                     <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -197,9 +232,14 @@ export default function RegisterPage() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-medium text-gray-200">Email</Label>
+                  <Label
+                    htmlFor="email"
+                    className="text-sm font-medium text-gray-200"
+                  >
+                    Email
+                  </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -214,9 +254,14 @@ export default function RegisterPage() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-medium text-gray-200">Password</Label>
+                  <Label
+                    htmlFor="password"
+                    className="text-sm font-medium text-gray-200"
+                  >
+                    Password
+                  </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -237,19 +282,25 @@ export default function RegisterPage() {
                       className="absolute right-1 top-1/2 transform -translate-y-1/2 h-10 w-10 text-gray-400 hover:text-white"
                       onClick={() => setShowPassword(!showPassword)}
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                   {password && (
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-400">Password strength</span>
-                        <span className={`font-medium ${passwordStrength.strength >= 66 ? 'text-green-400' : passwordStrength.strength >= 33 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        <span
+                          className={`font-medium ${passwordStrength.strength >= 66 ? "text-green-400" : passwordStrength.strength >= 33 ? "text-yellow-400" : "text-red-400"}`}
+                        >
                           {passwordStrength.text}
                         </span>
                       </div>
                       <div className="w-full bg-gray-700 rounded-full h-1.5">
-                        <div 
+                        <div
                           className={`h-1.5 rounded-full transition-all duration-300 ${passwordStrength.color}`}
                           style={{ width: `${passwordStrength.strength}%` }}
                         />
@@ -257,9 +308,14 @@ export default function RegisterPage() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="space-y-2">
-                  <Label htmlFor="confirm-password" className="text-sm font-medium text-gray-200">Confirm Password</Label>
+                  <Label
+                    htmlFor="confirm-password"
+                    className="text-sm font-medium text-gray-200"
+                  >
+                    Confirm Password
+                  </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -281,18 +337,22 @@ export default function RegisterPage() {
                       ) : (
                         <div className="h-4 w-4 rounded-full border-2 border-red-400" />
                       )}
-                      <span className={`text-xs ${password === confirmPassword ? 'text-green-400' : 'text-red-400'}`}>
-                        {password === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                      <span
+                        className={`text-xs ${password === confirmPassword ? "text-green-400" : "text-red-400"}`}
+                      >
+                        {password === confirmPassword
+                          ? "Passwords match"
+                          : "Passwords do not match"}
                       </span>
                     </div>
                   )}
                 </div>
               </div>
-              
+
               <div className="p-6 pt-0">
-                <Button 
-                  type="submit" 
-                  className="w-full h-12 hackclub-button text-base" 
+                <Button
+                  type="submit"
+                  className="w-full h-12 hackclub-button text-base"
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -314,19 +374,33 @@ export default function RegisterPage() {
               <span className="w-full border-t border-gray-600" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-gray-900 px-2 text-gray-400">Or continue with</span>
+              <span className="bg-gray-900 px-2 text-gray-400">
+                Or continue with
+              </span>
             </div>
           </div>
 
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="w-full h-12 border-gray-600 bg-gray-800/50 text-white hover:bg-gray-700/50 font-medium"
           >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="currentColor"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
             </svg>
             Sign up with Google
           </Button>
@@ -336,20 +410,29 @@ export default function RegisterPage() {
             <div className="text-xs text-gray-400">
               <p>
                 By creating an account, you agree to our{" "}
-                <Link href="#" className="text-primary hover:text-primary/80 transition-colors">
+                <Link
+                  href="#"
+                  className="text-primary hover:text-primary/80 transition-colors"
+                >
                   Terms of Service
                 </Link>{" "}
                 and{" "}
-                <Link href="#" className="text-primary hover:text-primary/80 transition-colors">
+                <Link
+                  href="#"
+                  className="text-primary hover:text-primary/80 transition-colors"
+                >
                   Privacy Policy
                 </Link>
                 .
               </p>
             </div>
-            
+
             <p className="text-sm text-gray-400">
               Already have an account?{" "}
-              <Link href="/login" className="font-medium text-primary hover:text-primary/80 transition-colors">
+              <Link
+                href="/login"
+                className="font-medium text-primary hover:text-primary/80 transition-colors"
+              >
                 Sign in
               </Link>
             </p>
@@ -357,5 +440,5 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

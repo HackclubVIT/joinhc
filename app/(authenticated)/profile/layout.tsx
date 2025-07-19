@@ -1,16 +1,16 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { User, Settings } from "lucide-react"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { User, Settings } from "lucide-react";
 
 export default function ProfileLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   return (
     <div className="min-h-screen hackclub-bg">
@@ -24,10 +24,7 @@ export default function ProfileLayout({
                   asChild
                   className="h-10 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
-                  <Link
-                    href="/profile"
-                    className="flex items-center gap-2"
-                  >
+                  <Link href="/profile" className="flex items-center gap-2">
                     <User className="h-4 w-4" />
                     Profile Info
                   </Link>
@@ -52,5 +49,5 @@ export default function ProfileLayout({
         </div>
       </div>
     </div>
-  )
+  );
 }

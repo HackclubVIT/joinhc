@@ -1,12 +1,29 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { useAuth } from "@/contexts/auth-context"
-import { User, Mail, Hash, Calendar, Building, Shield, Edit, CheckCircle, Clock, AlertTriangle } from "lucide-react"
+import { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/contexts/auth-context";
+import {
+  User,
+  Mail,
+  Hash,
+  Calendar,
+  Building,
+  Shield,
+  Edit,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+} from "lucide-react";
 import {
   getProfile,
   getApplicationForUser,
@@ -14,60 +31,70 @@ import {
   getDepartments,
   getOverallApplicationStatus,
   getPreferenceSelectionInfo,
-} from "@/lib/supabase/data-fetching"
-import { HackClubLogo } from "@/components/hackclub-logo"
+} from "@/lib/supabase/data-fetching";
+import { HackClubLogo } from "@/components/hackclub-logo";
 
 export default function ProfilePage() {
-  const { userRole, user } = useAuth()
-  const [isLoading, setIsLoading] = useState(true)
-  const [profile, setProfile] = useState<any>(null)
-  const [application, setApplication] = useState<any>(null)
-  const [departments, setDepartments] = useState<any[]>([])
+  const { userRole, user } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [profile, setProfile] = useState<any>(null);
+  const [application, setApplication] = useState<any>(null);
+  const [departments, setDepartments] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const profileData = await getProfile()
-        setProfile(profileData)
+        const profileData = await getProfile();
+        setProfile(profileData);
 
         if (userRole === "applicant") {
-          const applicationData = await getApplicationForUser()
+          const applicationData = await getApplicationForUser();
 
           if (applicationData) {
-            const depts = await getDepartments()
-            const firstDept = depts.find((d) => d.id === applicationData.first_pref_dept_id)
-            const secondDept = depts.find((d) => d.id === applicationData.second_pref_dept_id)
+            const depts = await getDepartments();
+            const firstDept = depts.find(
+              (d) => d.id === applicationData.first_pref_dept_id,
+            );
+            const secondDept = depts.find(
+              (d) => d.id === applicationData.second_pref_dept_id,
+            );
 
             setApplication({
               ...applicationData,
               firstPrefDept: firstDept?.name || "Unknown",
               secondPrefDept: secondDept?.name || "Unknown",
-            })
+            });
           }
         } else if (userRole === "recruiter") {
-          const recruiterDepts = await getRecruiterDepartments()
-          setDepartments(recruiterDepts.map((rd) => rd.department?.name || "Unknown"))
+          const recruiterDepts = await getRecruiterDepartments();
+          setDepartments(
+            recruiterDepts.map((rd) => rd.department?.name || "Unknown"),
+          );
         }
       } catch (err) {
-        console.error("Error fetching profile data:", err)
+        console.error("Error fetching profile data:", err);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
-    }
+    };
 
     if (user) {
-      fetchData()
+      fetchData();
     }
-  }, [user, userRole])
+  }, [user, userRole]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "shortlisted": return <CheckCircle className="h-4 w-4 text-green-500" />
-      case "waitlisted": return <Clock className="h-4 w-4 text-blue-500" />
-      case "rejected": return <AlertTriangle className="h-4 w-4 text-red-500" />
-      default: return <Clock className="h-4 w-4 text-yellow-500" />
+      case "shortlisted":
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case "waitlisted":
+        return <Clock className="h-4 w-4 text-blue-500" />;
+      case "rejected":
+        return <AlertTriangle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-yellow-500" />;
     }
-  }
+  };
 
   if (isLoading) {
     return (
@@ -91,7 +118,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -103,7 +130,8 @@ export default function ProfilePage() {
             <HackClubLogo size="lg" showText={false} />
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold mb-4 text-foreground">
-            {profile?.full_name || user?.email?.split("@")[0] || "User Profile"} 👤
+            {profile?.full_name || user?.email?.split("@")[0] || "User Profile"}{" "}
+            👤
           </h1>
           <div className="flex items-center justify-center gap-3 mb-4">
             <Badge
@@ -111,12 +139,16 @@ export default function ProfilePage() {
               className="px-4 py-1 text-sm font-medium"
             >
               <Shield className="mr-2 h-4 w-4" />
-              {userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'User'}
+              {userRole
+                ? userRole.charAt(0).toUpperCase() + userRole.slice(1)
+                : "User"}
             </Badge>
             <span className="text-muted-foreground">•</span>
             <span className="text-sm text-muted-foreground">
               Member since{" "}
-              {user?.created_at ? new Date(user.created_at).getFullYear() : "N/A"}
+              {user?.created_at
+                ? new Date(user.created_at).getFullYear()
+                : "N/A"}
             </span>
           </div>
           <p className="text-lg sm:text-xl text-muted-foreground mb-6 sm:mb-8">
@@ -137,8 +169,12 @@ export default function ProfilePage() {
                       <User className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <CardTitle className="text-xl font-semibold">Personal Information</CardTitle>
-                      <CardDescription>Your account and contact details</CardDescription>
+                      <CardTitle className="text-xl font-semibold">
+                        Personal Information
+                      </CardTitle>
+                      <CardDescription>
+                        Your account and contact details
+                      </CardDescription>
                     </div>
                   </div>
                 </div>
@@ -147,29 +183,44 @@ export default function ProfilePage() {
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
                       <User className="h-5 w-5 text-muted-foreground" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-                        <p className="font-semibold text-foreground">{profile?.full_name || "Not set"}</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Full Name
+                        </p>
+                        <p className="font-semibold text-foreground">
+                          {profile?.full_name || "Not set"}
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
                       <Mail className="h-5 w-5 text-muted-foreground" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-muted-foreground">Email Address</p>
-                        <p className="font-semibold text-foreground">{user?.email}</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Email Address
+                        </p>
+                        <p className="font-semibold text-foreground">
+                          {user?.email}
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
                       <Calendar className="h-5 w-5 text-muted-foreground" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-muted-foreground">Account Created</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Account Created
+                        </p>
                         <p className="font-semibold text-foreground">
-                          {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          }) : "N/A"}
+                          {user?.created_at
+                            ? new Date(user.created_at).toLocaleDateString(
+                                "en-US",
+                                {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                },
+                              )
+                            : "N/A"}
                         </p>
                       </div>
                     </div>
@@ -190,8 +241,12 @@ export default function ProfilePage() {
                       <Building className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
-                      <CardTitle className="text-xl font-semibold">Department Assignments</CardTitle>
-                      <CardDescription>Departments you manage recruitment for</CardDescription>
+                      <CardTitle className="text-xl font-semibold">
+                        Department Assignments
+                      </CardTitle>
+                      <CardDescription>
+                        Departments you manage recruitment for
+                      </CardDescription>
                     </div>
                   </div>
                 </div>
@@ -205,11 +260,11 @@ export default function ProfilePage() {
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-3 h-3 rounded-full bg-green-500 shadow-sm"></div>
-                            <span className="font-medium text-foreground">{dept}</span>
+                            <span className="font-medium text-foreground">
+                              {dept}
+                            </span>
                           </div>
-                          <Badge
-                            className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-200 dark:border-green-800"
-                          >
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-200 dark:border-green-800">
                             Active
                           </Badge>
                         </div>
@@ -220,8 +275,12 @@ export default function ProfilePage() {
                       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-secondary/50 flex items-center justify-center border border-border">
                         <Building className="h-8 w-8 text-muted-foreground" />
                       </div>
-                      <p className="text-muted-foreground font-medium">No departments assigned yet</p>
-                      <p className="text-sm text-muted-foreground mt-1">Contact admin for department assignments</p>
+                      <p className="text-muted-foreground font-medium">
+                        No departments assigned yet
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Contact admin for department assignments
+                      </p>
                     </div>
                   )}
                 </CardContent>
@@ -237,8 +296,12 @@ export default function ProfilePage() {
                       <User className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <CardTitle className="text-xl font-semibold">Personal Information</CardTitle>
-                      <CardDescription>Your account and personal details</CardDescription>
+                      <CardTitle className="text-xl font-semibold">
+                        Personal Information
+                      </CardTitle>
+                      <CardDescription>
+                        Your account and personal details
+                      </CardDescription>
                     </div>
                   </div>
                 </div>
@@ -247,24 +310,36 @@ export default function ProfilePage() {
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
                       <User className="h-5 w-5 text-muted-foreground" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-                        <p className="font-semibold text-foreground">{profile?.full_name || "Not set"}</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Full Name
+                        </p>
+                        <p className="font-semibold text-foreground">
+                          {profile?.full_name || "Not set"}
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
                       <Mail className="h-5 w-5 text-muted-foreground" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-muted-foreground">Email Address</p>
-                        <p className="font-semibold text-foreground">{user?.email}</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Email Address
+                        </p>
+                        <p className="font-semibold text-foreground">
+                          {user?.email}
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
                       <Hash className="h-5 w-5 text-muted-foreground" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-muted-foreground">Register Number</p>
-                        <p className="font-semibold text-foreground">{profile?.register_no || "Not set"}</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Register Number
+                        </p>
+                        <p className="font-semibold text-foreground">
+                          {profile?.register_no || "Not set"}
+                        </p>
                       </div>
                     </div>
 
@@ -284,8 +359,12 @@ export default function ProfilePage() {
                       <Building className="h-6 w-6 text-green-600 dark:text-green-400" />
                     </div>
                     <div>
-                      <CardTitle className="text-xl font-semibold">Application Summary</CardTitle>
-                      <CardDescription>Your recruitment application details</CardDescription>
+                      <CardTitle className="text-xl font-semibold">
+                        Application Summary
+                      </CardTitle>
+                      <CardDescription>
+                        Your recruitment application details
+                      </CardDescription>
                     </div>
                   </div>
                 </div>
@@ -296,77 +375,106 @@ export default function ProfilePage() {
                       <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <p className="text-sm font-medium text-muted-foreground">Overall Application Status</p>
-                            {getStatusIcon(getOverallApplicationStatus(application))}
+                            <p className="text-sm font-medium text-muted-foreground">
+                              Overall Application Status
+                            </p>
+                            {getStatusIcon(
+                              getOverallApplicationStatus(application),
+                            )}
                           </div>
-                          <Badge variant="outline" className="text-base font-medium px-3 py-1">
-                            {getOverallApplicationStatus(application).charAt(0).toUpperCase() + getOverallApplicationStatus(application).slice(1)}
+                          <Badge
+                            variant="outline"
+                            className="text-base font-medium px-3 py-1"
+                          >
+                            {getOverallApplicationStatus(application)
+                              .charAt(0)
+                              .toUpperCase() +
+                              getOverallApplicationStatus(application).slice(1)}
                           </Badge>
                         </div>
                       </div>
 
                       {/* Individual Preference Status */}
                       <div className="space-y-4">
-                        <div className={`p-4 rounded-lg border ${
-                          application.first_pref_status === 'shortlisted' 
-                            ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
-                            : application.first_pref_status === 'waitlisted'
-                            ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
-                            : application.first_pref_status === 'rejected'
-                            ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
-                            : 'bg-primary/5 border-primary/20'
-                        }`}>
+                        <div
+                          className={`p-4 rounded-lg border ${
+                            application.first_pref_status === "shortlisted"
+                              ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                              : application.first_pref_status === "waitlisted"
+                                ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
+                                : application.first_pref_status === "rejected"
+                                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
+                                  : "bg-primary/5 border-primary/20"
+                          }`}
+                        >
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-medium text-primary">First Preference</p>
+                            <p className="text-sm font-medium text-primary">
+                              First Preference
+                            </p>
                             <div className="flex items-center gap-2">
-                              <Badge className="bg-primary text-white">1st</Badge>
-                              {application.first_pref_status === 'shortlisted' && (
+                              <Badge className="bg-primary text-white">
+                                1st
+                              </Badge>
+                              {application.first_pref_status ===
+                                "shortlisted" && (
                                 <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                                   ✓ Selected
                                 </Badge>
                               )}
-                              {application.first_pref_status === 'waitlisted' && (
+                              {application.first_pref_status ===
+                                "waitlisted" && (
                                 <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                                   Waitlisted
                                 </Badge>
                               )}
-                              {application.first_pref_status === 'rejected' && (
+                              {application.first_pref_status === "rejected" && (
                                 <Badge variant="destructive">Rejected</Badge>
                               )}
                             </div>
                           </div>
-                          <p className="font-semibold text-foreground">{application.firstPrefDept}</p>
+                          <p className="font-semibold text-foreground">
+                            {application.firstPrefDept}
+                          </p>
                         </div>
 
-                        <div className={`p-4 rounded-lg border ${
-                          application.second_pref_status === 'shortlisted' 
-                            ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
-                            : application.second_pref_status === 'waitlisted'
-                            ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
-                            : application.second_pref_status === 'rejected'
-                            ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
-                            : 'bg-secondary/50 border-border'
-                        }`}>
+                        <div
+                          className={`p-4 rounded-lg border ${
+                            application.second_pref_status === "shortlisted"
+                              ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                              : application.second_pref_status === "waitlisted"
+                                ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
+                                : application.second_pref_status === "rejected"
+                                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
+                                  : "bg-secondary/50 border-border"
+                          }`}
+                        >
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-medium text-muted-foreground">Second Preference</p>
+                            <p className="text-sm font-medium text-muted-foreground">
+                              Second Preference
+                            </p>
                             <div className="flex items-center gap-2">
                               <Badge variant="secondary">2nd</Badge>
-                              {application.second_pref_status === 'shortlisted' && (
+                              {application.second_pref_status ===
+                                "shortlisted" && (
                                 <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                                   ✓ Selected
                                 </Badge>
                               )}
-                              {application.second_pref_status === 'waitlisted' && (
+                              {application.second_pref_status ===
+                                "waitlisted" && (
                                 <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                                   Waitlisted
                                 </Badge>
                               )}
-                              {application.second_pref_status === 'rejected' && (
+                              {application.second_pref_status ===
+                                "rejected" && (
                                 <Badge variant="destructive">Rejected</Badge>
                               )}
                             </div>
                           </div>
-                          <p className="font-semibold text-foreground">{application.secondPrefDept}</p>
+                          <p className="font-semibold text-foreground">
+                            {application.secondPrefDept}
+                          </p>
                         </div>
                       </div>
 
@@ -374,12 +482,16 @@ export default function ProfilePage() {
                       <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
                         <Calendar className="h-5 w-5 text-muted-foreground" />
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-muted-foreground">Submitted On</p>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Submitted On
+                          </p>
                           <p className="font-semibold text-foreground">
-                            {new Date(application.created_at).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
+                            {new Date(
+                              application.created_at,
+                            ).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
                             })}
                           </p>
                         </div>
@@ -390,8 +502,12 @@ export default function ProfilePage() {
                       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-secondary/50 flex items-center justify-center border border-border">
                         <Building className="h-8 w-8 text-muted-foreground" />
                       </div>
-                      <p className="text-muted-foreground font-medium">No application submitted yet</p>
-                      <p className="text-sm text-muted-foreground mt-1 mb-4">Submit your application to see details here</p>
+                      <p className="text-muted-foreground font-medium">
+                        No application submitted yet
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1 mb-4">
+                        Submit your application to see details here
+                      </p>
                       <Button className="hackclub-button" asChild>
                         <a href="/application">Submit Application</a>
                       </Button>
@@ -404,5 +520,5 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
-  )
-} 
+  );
+}

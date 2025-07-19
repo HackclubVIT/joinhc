@@ -1,82 +1,98 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Separator } from "@/components/ui/separator"
-import { Eye, EyeOff, Lock, Shield, User, Calendar, CheckCircle } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
-import { changePassword } from "@/lib/supabase/data-fetching"
-import { HackClubLogo } from "@/components/hackclub-logo"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  Shield,
+  User,
+  Calendar,
+  CheckCircle,
+} from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { changePassword } from "@/lib/supabase/data-fetching";
+import { HackClubLogo } from "@/components/hackclub-logo";
 
 export default function SettingsPage() {
-  const { user } = useAuth()
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [showPasswords, setShowPasswords] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const { user } = useAuth();
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setSuccess(null)
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
 
     if (newPassword !== confirmPassword) {
-      setError("New passwords do not match")
-      return
+      setError("New passwords do not match");
+      return;
     }
 
     if (newPassword.length < 6) {
-      setError("New password must be at least 6 characters long")
-      return
+      setError("New password must be at least 6 characters long");
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
-      const changePasswordPromise = changePassword(newPassword)
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Password change timeout")), 30000)
-      )
-      
-      const result = await Promise.race([changePasswordPromise, timeoutPromise]) as any
-     
+      const changePasswordPromise = changePassword(newPassword);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Password change timeout")), 30000),
+      );
+
+      const result = (await Promise.race([
+        changePasswordPromise,
+        timeoutPromise,
+      ])) as any;
+
       if (result.error) {
-        console.error("Password change failed:", result.error)
-        setError(result.error.message || "Failed to change password")
+        console.error("Password change failed:", result.error);
+        setError(result.error.message || "Failed to change password");
       } else {
-        setSuccess("Password changed successfully! You can now use your new password to log in.")
-        setNewPassword("")
-        setConfirmPassword("")
-        setShowPasswords(false)
-        
-        setTimeout(() => setSuccess(null), 5000)
+        setSuccess(
+          "Password changed successfully! You can now use your new password to log in.",
+        );
+        setNewPassword("");
+        setConfirmPassword("");
+        setShowPasswords(false);
+
+        setTimeout(() => setSuccess(null), 5000);
       }
     } catch (err: any) {
-      console.error("Unexpected error in handlePasswordChange:", err)
+      console.error("Unexpected error in handlePasswordChange:", err);
       if (err.message === "Password change timeout") {
-        setError("Password change timed out. Please try again.")
+        setError("Password change timed out. Please try again.");
       } else {
-        setError("An unexpected error occurred while changing password")
+        setError("An unexpected error occurred while changing password");
       }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const getPasswordStrength = (password: string) => {
-    if (password.length < 6) return { strength: 0, text: "Too short", color: "bg-red-500" }
-    if (password.length < 8) return { strength: 33, text: "Weak", color: "bg-yellow-500" }
-    if (password.length < 12) return { strength: 66, text: "Good", color: "bg-blue-500" }
-    return { strength: 100, text: "Strong", color: "bg-green-500" }
-  }
+    if (password.length < 6)
+      return { strength: 0, text: "Too short", color: "bg-red-500" };
+    if (password.length < 8)
+      return { strength: 33, text: "Weak", color: "bg-yellow-500" };
+    if (password.length < 12)
+      return { strength: 66, text: "Good", color: "bg-blue-500" };
+    return { strength: 100, text: "Strong", color: "bg-green-500" };
+  };
 
-  const passwordStrength = getPasswordStrength(newPassword)
+  const passwordStrength = getPasswordStrength(newPassword);
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -98,7 +114,10 @@ export default function SettingsPage() {
       <Separator />
 
       {error && (
-        <Alert variant="destructive" className="border-red-200 bg-red-50 dark:bg-red-950/20">
+        <Alert
+          variant="destructive"
+          className="border-red-200 bg-red-50 dark:bg-red-950/20"
+        >
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -119,14 +138,18 @@ export default function SettingsPage() {
             </div>
             <div>
               <CardTitle className="text-xl">Change Password</CardTitle>
-              <p className="text-sm text-muted-foreground">Update your password to keep your account secure</p>
+              <p className="text-sm text-muted-foreground">
+                Update your password to keep your account secure
+              </p>
             </div>
           </div>
         </div>
         <CardContent className="p-6">
           <form onSubmit={handlePasswordChange} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="new-password" className="text-sm font-medium">New Password</Label>
+              <Label htmlFor="new-password" className="text-sm font-medium">
+                New Password
+              </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -148,19 +171,27 @@ export default function SettingsPage() {
                   onClick={() => setShowPasswords(!showPasswords)}
                   disabled={isLoading}
                 >
-                  {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPasswords ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
               {newPassword && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Password strength</span>
-                    <span className={`font-medium ${passwordStrength.strength >= 66 ? 'text-green-600' : passwordStrength.strength >= 33 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    <span className="text-muted-foreground">
+                      Password strength
+                    </span>
+                    <span
+                      className={`font-medium ${passwordStrength.strength >= 66 ? "text-green-600" : passwordStrength.strength >= 33 ? "text-yellow-600" : "text-red-600"}`}
+                    >
                       {passwordStrength.text}
                     </span>
                   </div>
                   <div className="w-full bg-secondary rounded-full h-2">
-                    <div 
+                    <div
                       className={`h-2 rounded-full transition-all duration-300 ${passwordStrength.color}`}
                       style={{ width: `${passwordStrength.strength}%` }}
                     />
@@ -168,9 +199,11 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="confirm-password" className="text-sm font-medium">Confirm New Password</Label>
+              <Label htmlFor="confirm-password" className="text-sm font-medium">
+                Confirm New Password
+              </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -192,14 +225,22 @@ export default function SettingsPage() {
                   ) : (
                     <div className="h-4 w-4 rounded-full border-2 border-red-500" />
                   )}
-                  <span className={`text-xs ${newPassword === confirmPassword ? 'text-green-600' : 'text-red-600'}`}>
-                    {newPassword === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                  <span
+                    className={`text-xs ${newPassword === confirmPassword ? "text-green-600" : "text-red-600"}`}
+                  >
+                    {newPassword === confirmPassword
+                      ? "Passwords match"
+                      : "Passwords do not match"}
                   </span>
                 </div>
               )}
             </div>
-            
-            <Button type="submit" disabled={isLoading} className="w-full h-12 font-semibold">
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-12 font-semibold"
+            >
               {isLoading ? (
                 <div className="flex items-center space-x-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
@@ -222,7 +263,9 @@ export default function SettingsPage() {
             </div>
             <div>
               <CardTitle className="text-xl">Account Information</CardTitle>
-              <p className="text-sm text-muted-foreground">Your account details and information</p>
+              <p className="text-sm text-muted-foreground">
+                Your account details and information
+              </p>
             </div>
           </div>
         </div>
@@ -231,30 +274,40 @@ export default function SettingsPage() {
             <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
               <User className="h-5 w-5 text-muted-foreground" />
               <div className="flex-1">
-                <Label className="text-sm font-medium text-muted-foreground">Email Address</Label>
+                <Label className="text-sm font-medium text-muted-foreground">
+                  Email Address
+                </Label>
                 <p className="font-semibold">{user?.email}</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
               <Calendar className="h-5 w-5 text-muted-foreground" />
               <div className="flex-1">
-                <Label className="text-sm font-medium text-muted-foreground">Account Created</Label>
+                <Label className="text-sm font-medium text-muted-foreground">
+                  Account Created
+                </Label>
                 <p className="font-semibold">
-                  {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  }) : 'N/A'}
+                  {user?.created_at
+                    ? new Date(user.created_at).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : "N/A"}
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4 p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
               <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
               <div className="flex-1">
-                <Label className="text-sm font-medium text-green-800 dark:text-green-200">Account Status</Label>
-                <p className="font-semibold text-green-800 dark:text-green-200">Active & Verified</p>
+                <Label className="text-sm font-medium text-green-800 dark:text-green-200">
+                  Account Status
+                </Label>
+                <p className="font-semibold text-green-800 dark:text-green-200">
+                  Active & Verified
+                </p>
               </div>
             </div>
           </div>
@@ -291,5 +344,5 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
