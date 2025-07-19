@@ -9,11 +9,12 @@ export type Application = {
   applicant_id: string
   first_pref_dept_id: string
   first_pref_reason: string
+  first_pref_status: "pending" | "shortlisted" | "waitlisted" | "rejected"
   second_pref_dept_id: string
   second_pref_reason: string
+  second_pref_status: "pending" | "shortlisted" | "waitlisted" | "rejected"
   priority_reason: string
   portfolio_link: string | null
-  status: "pending" | "shortlisted" | "waitlisted" | "rejected"
   created_at: string
   updated_at: string
 }
@@ -79,8 +80,8 @@ export async function getApplicationForUser() {
       .from("applications")
       .select(`
         *,
-        first_dept:departments!applications_first_pref_dept_id_fkey(name),
-        second_dept:departments!applications_second_pref_dept_id_fkey(name)
+        first_dept:departments!applications_first_pref_dept_id_fkey(id, name),
+        second_dept:departments!applications_second_pref_dept_id_fkey(id, name)
       `)
       .eq("applicant_id", user.id)
       .single()
@@ -93,6 +94,38 @@ export async function getApplicationForUser() {
     return data
   } catch (err) {
     console.error("Error in getApplicationForUser:", err)
+    return null
+  }
+}
+
+// Add new function to get selected department for shortlisted applications
+export async function getSelectedDepartmentForApplication(applicationId: string): Promise<string | null> {
+  const supabase = createClient()
+  
+  try {
+    // This would need to be determined by your business logic
+    // For now, we'll assume first preference is selected unless specified otherwise
+    // You might want to add a 'selected_department_id' field to applications table
+    const { data, error } = await supabase
+      .from("applications")
+      .select(`
+        *,
+        first_dept:departments!applications_first_pref_dept_id_fkey(name),
+        second_dept:departments!applications_second_pref_dept_id_fkey(name)
+      `)
+      .eq("id", applicationId)
+      .single()
+
+    if (error) {
+      console.error("Error fetching selected department:", error)
+      return null
+    }
+
+    // For now, return first preference department name
+    // You should modify this logic based on how you track which department was selected
+    return data.first_dept?.name || null
+  } catch (err) {
+    console.error("Error in getSelectedDepartmentForApplication:", err)
     return null
   }
 }
@@ -241,7 +274,7 @@ export async function getRecruiterDepartments(userId?: string) {
       .from("recruiter_departments")
       .select(`
         *,
-        department:departments(*)
+        department:departments(id, name, description)
       `)
       .eq("recruiter_id", targetUserId)
 
@@ -250,7 +283,17 @@ export async function getRecruiterDepartments(userId?: string) {
       return []
     }
 
-    return data as RecruiterDepartment[]
+    console.log("Raw recruiter departments data:", data)
+
+    // Ensure we have consistent data structure
+    const processedData = data.map(item => ({
+      ...item,
+      department_id: item.department?.id || item.department_id
+    }))
+
+    console.log("Processed recruiter departments:", processedData)
+
+    return processedData as RecruiterDepartment[]
   } catch (err) {
     console.error("Error in getRecruiterDepartments:", err)
     return []
@@ -444,14 +487,16 @@ export async function getDepartmentApplicants(departmentId: string) {
   }
 }
 
-export async function updateApplicationStatus(applicationId: string, status: string) {
+export async function updateApplicationStatus(applicationId: string, status: string, preference: 'first' | 'second') {
   const supabase = createClient()
 
   try {
+    const updateField = preference === 'first' ? 'first_pref_status' : 'second_pref_status'
+    
     const { data, error } = await supabase
       .from("applications")
       .update({
-        status,
+        [updateField]: status,
         updated_at: new Date().toISOString(),
       })
       .eq("id", applicationId)
@@ -468,6 +513,51 @@ export async function updateApplicationStatus(applicationId: string, status: str
     console.error("Error in updateApplicationStatus:", err)
     throw err
   }
+}
+
+// Helper function to get overall application status based on preferences
+export function getOverallApplicationStatus(application: Application): "pending" | "shortlisted" | "waitlisted" | "rejected" {
+  // If either preference is shortlisted, overall is shortlisted
+  if (application.first_pref_status === 'shortlisted' || application.second_pref_status === 'shortlisted') {
+    return 'shortlisted'
+  }
+  
+  // If either preference is waitlisted, overall is waitlisted
+  if (application.first_pref_status === 'waitlisted' || application.second_pref_status === 'waitlisted') {
+    return 'waitlisted'
+  }
+  
+  // If both are rejected, overall is rejected
+  if (application.first_pref_status === 'rejected' && application.second_pref_status === 'rejected') {
+    return 'rejected'
+  }
+  
+  // Otherwise, it's pending
+  return 'pending'
+}
+
+// Helper function to get which department preference was shortlisted/waitlisted
+export function getPreferenceSelectionInfo(application: Application): { type: 'first' | 'second' | 'both' | null, status: string } {
+  const firstShortlisted = application.first_pref_status === 'shortlisted'
+  const secondShortlisted = application.second_pref_status === 'shortlisted'
+  
+  if (firstShortlisted && secondShortlisted) {
+    return { type: 'both', status: 'shortlisted' }
+  }
+  
+  if (firstShortlisted) {
+    return { type: 'first', status: 'shortlisted' }
+  }
+  if (secondShortlisted) {
+    return { type: 'second', status: 'shortlisted' }
+  }
+  if (application.first_pref_status === 'waitlisted') {
+    return { type: 'first', status: 'waitlisted' }
+  }
+  if (application.second_pref_status === 'waitlisted') {
+    return { type: 'second', status: 'waitlisted' }
+  }
+  return { type: null, status: 'pending' }
 }
 
 export async function getApplicationSettings() {
@@ -496,9 +586,8 @@ export async function getAllApplicationsForExport(departmentId?: string) {
       .from("applications")
       .select(`
         *,
-        applicant:profiles!applications_applicant_id_fkey(full_name, register_no, email),
-        first_dept:departments!applications_first_pref_dept_id_fkey(name),
-        second_dept:departments!applications_second_pref_dept_id_fkey(name)
+        first_dept:departments!applications_first_pref_dept_id_fkey(id, name),
+        second_dept:departments!applications_second_pref_dept_id_fkey(id, name)
       `)
       .order("created_at", { ascending: false })
 
@@ -513,7 +602,14 @@ export async function getAllApplicationsForExport(departmentId?: string) {
       return []
     }
 
-    return data
+    // Transform the data to include department names
+    const transformedData = data.map(app => ({
+      ...app,
+      dept_first_pref: app.first_dept?.name || 'Unknown',
+      dept_second_pref: app.second_dept?.name || 'Unknown'
+    }))
+
+    return transformedData
   } catch (err) {
     console.error("Error in getAllApplicationsForExport:", err)
     return []

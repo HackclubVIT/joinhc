@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { HackClubLogo } from "@/components/hackclub-logo"
 
 function AuthCallbackContent() {
   const supabase = createClient()
@@ -134,10 +135,13 @@ function AuthCallbackContent() {
 
   if (isProcessing) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center hackclub-bg">
         <div className="text-center">
+          <div className="flex justify-center mb-6">
+            <HackClubLogo size="lg" showText={false} />
+          </div>
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Processing authentication...</p>
+          <p className="text-foreground">Processing authentication...</p>
         </div>
       </div>
     )
@@ -145,8 +149,11 @@ function AuthCallbackContent() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center hackclub-bg">
         <div className="text-center">
+          <div className="flex justify-center mb-6">
+            <HackClubLogo size="lg" showText={false} />
+          </div>
           <div className="mb-4 text-red-500">
             <p className="text-lg font-semibold">Authentication Error</p>
             <p className="text-sm">{error}</p>
@@ -162,10 +169,13 @@ function AuthCallbackContent() {
 
 function LoadingFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center hackclub-bg">
       <div className="text-center">
+        <div className="flex justify-center mb-6">
+          <HackClubLogo size="lg" showText={false} />
+        </div>
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-        <p>Loading...</p>
+        <p className="text-foreground">Loading...</p>
       </div>
     </div>
   )

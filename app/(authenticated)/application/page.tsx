@@ -146,9 +146,9 @@ export default function ApplicationPage() {
   }
 
   return (
-    <div className="container py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Application Form</h1>
+    <div className="content-container py-6 sm:py-10">
+      <div className="mb-6 sm:mb-8 px-4">
+        <h1 className="text-2xl sm:text-3xl font-bold">Application Form</h1>
         <p className="text-muted-foreground">
           {existingApplication
             ? "Update your application details below."
@@ -161,206 +161,208 @@ export default function ApplicationPage() {
         )}
       </div>
 
-      {deadlinePassed && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Application Closed</AlertTitle>
-          <AlertDescription>
-            The application deadline has passed. You can no longer submit or edit your application.
-          </AlertDescription>
-        </Alert>
-      )}
+      <div className="px-4">
+        {deadlinePassed && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Application Closed</AlertTitle>
+            <AlertDescription>
+              The application deadline has passed. You can no longer submit or edit your application.
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {success && (
-        <Alert className="mb-6">
-          <CheckCircle className="h-4 w-4" />
-          <AlertDescription>{success}</AlertDescription>
-        </Alert>
-      )}
+        {success && (
+          <Alert className="mb-6">
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
 
-      <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-            <CardDescription>Please provide your personal details</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
+        <form onSubmit={handleSubmit}>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>Please provide your personal details</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                    disabled={true}
+                    className="bg-muted" // Name comes from auth, can't be changed
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                    disabled={true} // Email comes from auth, can't be changed
+                    className="bg-muted"
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="register_no">Register Number</Label>
                 <Input
-                  id="name"
-                  name="name"
-                  value={formData.name}
+                  id="register_no"
+                  name="register_no"
+                  value={formData.register_no}
                   onChange={handleChange}
                   required
                   disabled={true}
-                  className="bg-muted" // Name comes from auth, can't be changed
+                  className="bg-muted" // Register number comes from auth, can't be changed
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  disabled={true} // Email comes from auth, can't be changed
-                  className="bg-muted"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="register_no">Register Number</Label>
-              <Input
-                id="register_no"
-                name="register_no"
-                value={formData.register_no}
-                onChange={handleChange}
-                required
-                disabled={true}
-                className="bg-muted" // Register number comes from auth, can't be changed
-              />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Department Preferences</CardTitle>
-            <CardDescription>Select your preferred departments and provide reasons</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="dept_first_pref">First Preference Department</Label>
-                <Select
-                  disabled={deadlinePassed}
-                  onValueChange={(value) => handleSelectChange("dept_first_pref", value)}
-                  value={formData.dept_first_pref}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEPARTMENTS.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Department Preferences</CardTitle>
+              <CardDescription>Select your preferred departments and provide reasons</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dept_first_pref">First Preference Department</Label>
+                  <Select
+                    disabled={deadlinePassed}
+                    onValueChange={(value) => handleSelectChange("dept_first_pref", value)}
+                    value={formData.dept_first_pref}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DEPARTMENTS.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reason_first_pref">Reason for First Preference</Label>
+                  <Textarea
+                    id="reason_first_pref"
+                    name="reason_first_pref"
+                    value={formData.reason_first_pref}
+                    onChange={handleChange}
+                    rows={3}
+                    required
+                    disabled={deadlinePassed}
+                    placeholder="Explain why this is your first choice..."
+                  />
+                </div>
               </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dept_second_pref">Second Preference Department</Label>
+                  <Select
+                    disabled={deadlinePassed}
+                    onValueChange={(value) => handleSelectChange("dept_second_pref", value)}
+                    value={formData.dept_second_pref}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DEPARTMENTS.filter((dept) => dept.id !== formData.dept_first_pref).map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reason_second_pref">Reason for Second Preference</Label>
+                  <Textarea
+                    id="reason_second_pref"
+                    name="reason_second_pref"
+                    value={formData.reason_second_pref}
+                    onChange={handleChange}
+                    rows={3}
+                    required
+                    disabled={deadlinePassed}
+                    placeholder="Explain why this is your second choice..."
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="reason_first_pref">Reason for First Preference</Label>
+                <Label htmlFor="reason_priority">Reason for Preference Priority</Label>
                 <Textarea
-                  id="reason_first_pref"
-                  name="reason_first_pref"
-                  value={formData.reason_first_pref}
+                  id="reason_priority"
+                  name="reason_priority"
+                  value={formData.reason_priority}
                   onChange={handleChange}
                   rows={3}
                   required
                   disabled={deadlinePassed}
-                  placeholder="Explain why this is your first choice..."
+                  placeholder="Explain why you prioritized your preferences in this order..."
                 />
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="space-y-4">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Additional Information</CardTitle>
+              <CardDescription>Provide links to your portfolio, resume, or GitHub</CardDescription>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-2">
-                <Label htmlFor="dept_second_pref">Second Preference Department</Label>
-                <Select
-                  disabled={deadlinePassed}
-                  onValueChange={(value) => handleSelectChange("dept_second_pref", value)}
-                  value={formData.dept_second_pref}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEPARTMENTS.filter((dept) => dept.id !== formData.dept_first_pref).map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="reason_second_pref">Reason for Second Preference</Label>
+                <Label htmlFor="links">Portfolio/Resume/GitHub Links</Label>
                 <Textarea
-                  id="reason_second_pref"
-                  name="reason_second_pref"
-                  value={formData.reason_second_pref}
+                  id="links"
+                  name="links"
+                  value={formData.links}
                   onChange={handleChange}
-                  rows={3}
-                  required
+                  placeholder="https://portfolio.com&#10;https://github.com/username&#10;https://resume-link.com"
                   disabled={deadlinePassed}
-                  placeholder="Explain why this is your second choice..."
+                  rows={3}
                 />
+                <p className="text-xs text-muted-foreground">You can add multiple links, one per line</p>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="reason_priority">Reason for Preference Priority</Label>
-              <Textarea
-                id="reason_priority"
-                name="reason_priority"
-                value={formData.reason_priority}
-                onChange={handleChange}
-                rows={3}
-                required
-                disabled={deadlinePassed}
-                placeholder="Explain why you prioritized your preferences in this order..."
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Additional Information</CardTitle>
-            <CardDescription>Provide links to your portfolio, resume, or GitHub</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="links">Portfolio/Resume/GitHub Links</Label>
-              <Textarea
-                id="links"
-                name="links"
-                value={formData.links}
-                onChange={handleChange}
-                placeholder="https://portfolio.com&#10;https://github.com/username&#10;https://resume-link.com"
-                disabled={deadlinePassed}
-                rows={3}
-              />
-              <p className="text-xs text-muted-foreground">You can add multiple links, one per line</p>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={isSubmitting || deadlinePassed}>
-              {isSubmitting
-                ? existingApplication
-                  ? "Updating..."
-                  : "Submitting..."
-                : deadlinePassed
-                  ? "Deadline Passed"
-                  : existingApplication
-                    ? "Update Application"
-                    : "Submit Application"}
-            </Button>
-          </CardFooter>
-        </Card>
-      </form>
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" className="w-full" disabled={isSubmitting || deadlinePassed}>
+                {isSubmitting
+                  ? existingApplication
+                    ? "Updating..."
+                    : "Submitting..."
+                  : deadlinePassed
+                    ? "Deadline Passed"
+                    : existingApplication
+                      ? "Update Application"
+                      : "Submit Application"}
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      </div>
     </div>
   )
 }

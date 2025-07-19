@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, Lock, Shield, User, Calendar, CheckCircle } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { changePassword } from "@/lib/supabase/data-fetching"
+import { HackClubLogo } from "@/components/hackclub-logo"
 
 export default function SettingsPage() {
   const { user } = useAuth()
@@ -68,111 +69,227 @@ export default function SettingsPage() {
     }
   }
 
+  const getPasswordStrength = (password: string) => {
+    if (password.length < 6) return { strength: 0, text: "Too short", color: "bg-red-500" }
+    if (password.length < 8) return { strength: 33, text: "Weak", color: "bg-yellow-500" }
+    if (password.length < 12) return { strength: 66, text: "Good", color: "bg-blue-500" }
+    return { strength: 100, text: "Strong", color: "bg-green-500" }
+  }
+
+  const passwordStrength = getPasswordStrength(newPassword)
+
   return (
-    <div className="container mx-auto py-8">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Account Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your account settings and preferences
-          </p>
+    <div className="max-w-2xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <div className="flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border-2 border-primary/20">
+            <HackClubLogo size="sm" showText={false} />
+          </div>
         </div>
+        <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          Account Settings
+        </h1>
+        <p className="text-muted-foreground">
+          Manage your security settings and account preferences
+        </p>
+      </div>
 
-        <Separator />
+      <Separator />
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+      {error && (
+        <Alert variant="destructive" className="border-red-200 bg-red-50 dark:bg-red-950/20">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        {success && (
-          <Alert>
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        )}
+      {success && (
+        <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20 text-green-800 dark:text-green-200">
+          <CheckCircle className="h-4 w-4" />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Change Password</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
+      {/* Change Password Card */}
+      <Card className="hackclub-card overflow-hidden">
+        <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-primary/10">
+              <Lock className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-xl">Change Password</CardTitle>
+              <p className="text-sm text-muted-foreground">Update your password to keep your account secure</p>
+            </div>
+          </div>
+        </div>
+        <CardContent className="p-6">
+          <form onSubmit={handlePasswordChange} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="new-password" className="text-sm font-medium">New Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="new-password"
                   type={showPasswords ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  className="pl-10 pr-12 h-12"
+                  placeholder="Enter new password"
                   required
                   disabled={isLoading}
                   minLength={6}
                 />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-10 w-10"
+                  onClick={() => setShowPasswords(!showPasswords)}
+                  disabled={isLoading}
+                >
+                  {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm New Password</Label>
+              {newPassword && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Password strength</span>
+                    <span className={`font-medium ${passwordStrength.strength >= 66 ? 'text-green-600' : passwordStrength.strength >= 33 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      {passwordStrength.text}
+                    </span>
+                  </div>
+                  <div className="w-full bg-secondary rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-300 ${passwordStrength.color}`}
+                      style={{ width: `${passwordStrength.strength}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password" className="text-sm font-medium">Confirm New Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="confirm-password"
                   type={showPasswords ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pl-10 h-12"
+                  placeholder="Confirm new password"
                   required
                   disabled={isLoading}
                   minLength={6}
                 />
               </div>
-
-              <div className="flex items-center space-x-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowPasswords(!showPasswords)}
-                  disabled={isLoading}
-                >
-                  {showPasswords ? (
-                    <>
-                      <EyeOff className="h-4 w-4 mr-2" />
-                      Hide
-                    </>
+              {confirmPassword && (
+                <div className="flex items-center space-x-2">
+                  {newPassword === confirmPassword ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
                   ) : (
-                    <>
-                      <Eye className="h-4 w-4 mr-2" />
-                      Show
-                    </>
+                    <div className="h-4 w-4 rounded-full border-2 border-red-500" />
                   )}
-                </Button>
-              </div>
-              
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Changing Password..." : "Change Password"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                  <span className={`text-xs ${newPassword === confirmPassword ? 'text-green-600' : 'text-red-600'}`}>
+                    {newPassword === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                  </span>
+                </div>
+              )}
+            </div>
+            
+            <Button type="submit" disabled={isLoading} className="w-full h-12 font-semibold">
+              {isLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <span>Changing Password...</span>
+                </div>
+              ) : (
+                "Change Password"
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div>
-                <Label className="text-sm font-medium">Email</Label>
-                <p className="text-sm text-muted-foreground">{user?.email}</p>
+      {/* Account Information Card */}
+      <Card className="hackclub-card overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 p-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900">
+              <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <CardTitle className="text-xl">Account Information</CardTitle>
+              <p className="text-sm text-muted-foreground">Your account details and information</p>
+            </div>
+          </div>
+        </div>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
+              <User className="h-5 w-5 text-muted-foreground" />
+              <div className="flex-1">
+                <Label className="text-sm font-medium text-muted-foreground">Email Address</Label>
+                <p className="font-semibold">{user?.email}</p>
               </div>
-              <div>
-                <Label className="text-sm font-medium">Account Created</Label>
-                <p className="text-sm text-muted-foreground">
-                  {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+            </div>
+            
+            <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+              <div className="flex-1">
+                <Label className="text-sm font-medium text-muted-foreground">Account Created</Label>
+                <p className="font-semibold">
+                  {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  }) : 'N/A'}
                 </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            
+            <div className="flex items-center gap-4 p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+              <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <div className="flex-1">
+                <Label className="text-sm font-medium text-green-800 dark:text-green-200">Account Status</Label>
+                <p className="font-semibold text-green-800 dark:text-green-200">Active & Verified</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Security Tips Card */}
+      <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border-amber-200 dark:border-amber-800 hackclub-card">
+        <CardHeader>
+          <CardTitle className="text-xl text-amber-800 dark:text-amber-200 flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Security Tips
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
+            <li className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Use a strong password with at least 8 characters
+            </li>
+            <li className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Don't share your password with anyone
+            </li>
+            <li className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Log out from shared computers
+            </li>
+            <li className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Contact support if you notice any suspicious activity
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
     </div>
   )
 }
