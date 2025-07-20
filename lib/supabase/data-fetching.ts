@@ -886,3 +886,171 @@ export async function getPanels(departmentId: string) {
     return [];
   }
 }
+
+export async function getPanelData(panel_id: string) {
+  const supabase = createClient();
+
+  const fields = "*";
+
+  try {
+    const { data: firstPref, error: error1 } = await supabase
+      .from("recruitment_panel")
+      .select(
+        `*, applicants: applications!applications_first_pref_panel_id_fkey(${fields})`
+      )
+      .eq("id", panel_id)
+      .single();
+
+    if (error1) {
+      console.error("Error fetching Panel Data: ", error1);
+      return;
+    }
+    const { data: secPref, error: error2 } = await supabase
+      .from("recruitment_panel")
+      .select(
+        `applicants: applications!applications_second_pref_panel_id_fkey(${fields})`
+      )
+      .eq("id", panel_id)
+      .single();
+
+    if (error2) {
+      console.error("Error fetching Panel Data: ", error2);
+      return;
+    }
+
+    const applicants1 = firstPref.applicants;
+    const applicants2 = secPref.applicants;
+
+    return {
+      name: firstPref.name as string,
+      meet_link: firstPref.meet_link as string,
+      applicants: [...applicants1, ...applicants2],
+      first_pref_count: applicants1.length,
+      second_pref_count: applicants2.length,
+      department_id: firstPref.department_id as string,
+    };
+  } catch (err) {
+    console.error("Error in getPanelData: ", err);
+    return;
+  }
+}
+
+export async function checkIsEvaluatorOrRecruiter(
+  panel_id: string
+): Promise<boolean> {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruiter_departments")
+      .select()
+      .eq("panel_id", panel_id);
+
+    if (error) {
+      console.error("Error in checkIsEvaluatorOrRecruiter: ", error);
+      return false;
+    }
+
+    let allowed = false;
+
+    for (const rec of data) {
+      if (rec.recruiter_id === (await supabase.auth.getUser()).data.user?.id) {
+        allowed = true;
+        break;
+      }
+    }
+
+    return allowed;
+  } catch (e) {
+    console.error("Error in checkIsEvaluatorOrRecruiter: ", e);
+    return false;
+  }
+}
+
+export async function updateOrCreateApplicantMark(
+  application_id: string,
+  department_id: string,
+  marks: number,
+  remarks: string
+) {
+  const supabase = createClient();
+
+  try {
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    console.log(userId);
+    const { data, error } = await supabase
+      .from("evaluations")
+      .select()
+      .eq("application_id", application_id)
+      .eq("department_id", department_id)
+      .eq("recruiter_id", userId)
+      .select();
+
+    if (error) {
+      console.error("Error updating or creating applicant mark:", error);
+      return false;
+    }
+
+    if (data.length > 0) {
+      // Update existing mark
+      const { error: updateError } = await supabase
+        .from("evaluations")
+        .update({
+          score: marks,
+          remarks: remarks,
+        })
+        .eq("id", data[0].id);
+
+      if (updateError) {
+        console.error("Error updating applicant mark:", updateError);
+        return false;
+      }
+    } else {
+      // Create new mark
+      const { error: insertError } = await supabase.from("evaluations").insert({
+        application_id: application_id,
+        department_id: department_id,
+        recruiter_id: userId,
+        score: marks,
+        remarks: remarks,
+      });
+
+      if (insertError) {
+        console.error("Error creating applicant mark:", insertError);
+        return false;
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Error in updateOrCreateApplicantMark:", err);
+    throw false;
+  }
+}
+
+export async function getApplicantMarks(
+  application_id: string,
+  department_id: string
+): Promise<{ score: number; remarks: string } | null> {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("evaluations")
+      .select("score, remarks")
+      .eq("application_id", application_id)
+      .eq("department_id", department_id)
+      .eq("recruiter_id", (await supabase.auth.getUser()).data.user?.id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching applicant marks:", error);
+      return null;
+    }
+
+    return data ? { score: data.score, remarks: data.remarks } : null;
+  } catch (err) {
+    console.error("Error in getApplicantMarks:", err);
+    return null;
+  }
+}

@@ -65,7 +65,7 @@ export default function DepartmentPage() {
   const [preferenceFilter, setPreferenceFilter] = useState("all");
   const [applicants, setApplicants] = useState<Application[]>([]);
   const [filteredApplicants, setFilteredApplicants] = useState<Application[]>(
-    [],
+    []
   );
   const [isLoading, setIsLoading] = useState(true);
   const [selectedApplicant, setSelectedApplicant] =
@@ -129,7 +129,7 @@ export default function DepartmentPage() {
   const handleStatusUpdate = async (
     applicationId: string,
     newStatus: string,
-    preference: "first" | "second",
+    preference: "first" | "second"
   ) => {
     if (!user) return;
 
@@ -147,7 +147,7 @@ export default function DepartmentPage() {
             return { ...app, [updateField]: newStatus };
           }
           return app;
-        }),
+        })
       );
     } catch (err) {
       console.error("Error updating status:", err);
@@ -158,7 +158,7 @@ export default function DepartmentPage() {
 
   const getPreferenceStatus = (
     applicant: Application,
-    preference: "first" | "second",
+    preference: "first" | "second"
   ) => {
     return preference === "first"
       ? applicant.first_pref_status
@@ -193,22 +193,22 @@ export default function DepartmentPage() {
   const departmentStats = {
     totalApplicants: applicants.length,
     firstPrefCount: applicants.filter(
-      (app) => app.first_pref_dept_id === deptId,
+      (app) => app.first_pref_dept_id === deptId
     ).length,
     secondPrefCount: applicants.filter(
-      (app) => app.second_pref_dept_id === deptId,
+      (app) => app.second_pref_dept_id === deptId
     ).length,
     pendingCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "pending",
+      (app) => getOverallApplicationStatus(app) === "pending"
     ).length,
     shortlistedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "shortlisted",
+      (app) => getOverallApplicationStatus(app) === "shortlisted"
     ).length,
     waitlistedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "waitlisted",
+      (app) => getOverallApplicationStatus(app) === "waitlisted"
     ).length,
     rejectedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "rejected",
+      (app) => getOverallApplicationStatus(app) === "rejected"
     ).length,
   };
 
@@ -436,7 +436,7 @@ export default function DepartmentPage() {
                     const preferenceType = getPreferenceType(applicant);
                     const currentStatus = getPreferenceStatus(
                       applicant,
-                      preferenceType,
+                      preferenceType
                     );
 
                     return (
@@ -496,7 +496,7 @@ export default function DepartmentPage() {
                                       handleStatusUpdate(
                                         applicant.id,
                                         "shortlisted",
-                                        preferenceType,
+                                        preferenceType
                                       )
                                     }
                                     disabled={
@@ -514,7 +514,7 @@ export default function DepartmentPage() {
                                       handleStatusUpdate(
                                         applicant.id,
                                         "waitlisted",
-                                        preferenceType,
+                                        preferenceType
                                       )
                                     }
                                     disabled={
@@ -532,7 +532,7 @@ export default function DepartmentPage() {
                                       handleStatusUpdate(
                                         applicant.id,
                                         "rejected",
-                                        preferenceType,
+                                        preferenceType
                                       )
                                     }
                                     disabled={
@@ -600,7 +600,7 @@ export default function DepartmentPage() {
                       <Label className="text-sm font-medium">Status</Label>
                       <div className="mt-1">
                         {getStatusBadge(
-                          getOverallApplicationStatus(selectedApplicant),
+                          getOverallApplicationStatus(selectedApplicant)
                         )}
                       </div>
                     </div>
@@ -679,7 +679,7 @@ export default function DepartmentPage() {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-3 w-3" />
                         {new Date(
-                          selectedApplicant.created_at,
+                          selectedApplicant.created_at
                         ).toLocaleString()}
                       </div>
                     </div>
@@ -697,7 +697,7 @@ export default function DepartmentPage() {
                         handleStatusUpdate(
                           selectedApplicant.id,
                           "shortlisted",
-                          preferenceType,
+                          preferenceType
                         );
                       }
                     }}
@@ -715,7 +715,7 @@ export default function DepartmentPage() {
                         handleStatusUpdate(
                           selectedApplicant.id,
                           "waitlisted",
-                          preferenceType,
+                          preferenceType
                         );
                       }
                     }}
@@ -733,7 +733,7 @@ export default function DepartmentPage() {
                         handleStatusUpdate(
                           selectedApplicant.id,
                           "rejected",
-                          preferenceType,
+                          preferenceType
                         );
                       }
                     }}
