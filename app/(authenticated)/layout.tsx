@@ -1,10 +1,10 @@
-import type React from "react"
-import { AuthLayout } from "@/components/auth-layout"
+import type React from "react";
+import { AuthLayout } from "@/components/auth-layout";
 
 export default function AuthenticatedLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  return <AuthLayout>{children}</AuthLayout>
+  return <AuthLayout>{children}</AuthLayout>;
 }

@@ -1,15 +1,34 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   ChevronRight,
@@ -22,135 +41,215 @@ import {
   Mail,
   Hash,
   Calendar,
-  ExternalLink
-} from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+  ExternalLink,
+  Receipt,
+  NotebookPen,
+  NotebookText,
+} from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
 import {
   getDepartmentApplicants,
   getDepartmentNameById,
   updateApplicationStatus,
   getOverallApplicationStatus,
   type Application,
-} from "@/lib/supabase/data-fetching"
-import { HackClubLogo } from "@/components/hackclub-logo"
+  getApplicantMarks,
+} from "@/lib/supabase/data-fetching";
+import { HackClubLogo } from "@/components/hackclub-logo";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
 
 export default function DepartmentPage() {
-  const params = useParams()
-  const router = useRouter()
-  const { user } = useAuth()
-  const deptId = params.dept as string
+  const params = useParams();
+  const router = useRouter();
+  const { user } = useAuth();
+  const deptId = params.dept as string;
 
-  const [departmentName, setDepartmentName] = useState<string>("")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [preferenceFilter, setPreferenceFilter] = useState("all")
-  const [applicants, setApplicants] = useState<Application[]>([])
-  const [filteredApplicants, setFilteredApplicants] = useState<Application[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
+  const [departmentName, setDepartmentName] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [preferenceFilter, setPreferenceFilter] = useState("all");
+  const [applicants, setApplicants] = useState<Application[]>([]);
+  const [filteredApplicants, setFilteredApplicants] = useState<Application[]>(
+    []
+  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedApplicant, setSelectedApplicant] =
+    useState<Application | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isMarksDialogOpen, setIsMarksDialogOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("")
-  const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("")
+  const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("");
+  const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("");
+
+  const [evaluations, setEvaluations] = useState<
+    { score: number; remarks: string; recruiter: { full_name: string } }[]
+  >([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (selectedApplicant) {
+        setEvaluations(await getApplicantMarks(selectedApplicant.id, deptId));
+      }
+    };
+
+    fetchData();
+  }, [isMarksDialogOpen]);
 
   useEffect(() => {
     const fetchDeptName = async () => {
-      const name = await getDepartmentNameById(deptId)
-      setDepartmentName(name || deptId)
-    }
-    fetchDeptName()
-  }, [deptId])
+      const name = await getDepartmentNameById(deptId);
+      setDepartmentName(name || deptId);
+    };
+    fetchDeptName();
+  }, [deptId]);
 
   useEffect(() => {
     const fetchApplicants = async () => {
       try {
-        const data = await getDepartmentApplicants(deptId)
-        setApplicants(data)
+        const data = await getDepartmentApplicants(deptId);
+        setApplicants(data);
       } catch (err) {
-        console.error("Error fetching applicants:", err)
+        console.error("Error fetching applicants:", err);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
-    }
+    };
 
-    fetchApplicants()
-  }, [deptId])
+    fetchApplicants();
+  }, [deptId]);
 
   useEffect(() => {
     const filtered = applicants.filter((applicant) => {
       const matchesSearch =
         applicant.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         applicant.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        applicant.register_no?.toLowerCase().includes(searchQuery.toLowerCase())
+        applicant.register_no
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase());
 
-      const overallStatus = getOverallApplicationStatus(applicant)
-      const matchesStatus = statusFilter === "all" || overallStatus.toLowerCase() === statusFilter.toLowerCase()
+      const overallStatus = getOverallApplicationStatus(applicant);
+      const matchesStatus =
+        statusFilter === "all" ||
+        overallStatus.toLowerCase() === statusFilter.toLowerCase();
 
       const matchesPreference =
         preferenceFilter === "all" ||
-        (preferenceFilter === "first" && applicant.first_pref_dept_id === deptId) ||
-        (preferenceFilter === "second" && applicant.second_pref_dept_id === deptId)
+        (preferenceFilter === "first" &&
+          applicant.first_pref_dept_id === deptId) ||
+        (preferenceFilter === "second" &&
+          applicant.second_pref_dept_id === deptId);
 
-      return matchesSearch && matchesStatus && matchesPreference
-    })
+      return matchesSearch && matchesStatus && matchesPreference;
+    });
 
-    setFilteredApplicants(filtered)
-  }, [applicants, searchQuery, statusFilter, preferenceFilter, deptId])
+    setFilteredApplicants(filtered);
+  }, [applicants, searchQuery, statusFilter, preferenceFilter, deptId]);
 
-  const handleStatusUpdate = async (applicationId: string, newStatus: string, preference: 'first' | 'second') => {
-    if (!user) return
+  const handleStatusUpdate = async (
+    applicationId: string,
+    newStatus: string,
+    preference: "first" | "second"
+  ) => {
+    if (!user) return;
 
-    setIsUpdating(true)
+    setIsUpdating(true);
     try {
-      await updateApplicationStatus(applicationId, newStatus, preference)
+      const data = await updateApplicationStatus(
+        applicationId,
+        newStatus,
+        preference
+      );
 
       setApplicants((prev) =>
         prev.map((app) => {
           if (app.id === applicationId) {
-            const updateField = preference === 'first' ? 'first_pref_status' : 'second_pref_status'
-            return { ...app, [updateField]: newStatus }
+            const updateField =
+              preference === "first"
+                ? "first_pref_status"
+                : "second_pref_status";
+            return { ...app, [updateField]: newStatus };
           }
-          return app
-        }),
-      )
+          return app;
+        })
+      );
+      return data;
     } catch (err) {
-      console.error("Error updating status:", err)
+      console.error("Error updating status:", err);
     } finally {
-      setIsUpdating(false)
+      setIsUpdating(false);
     }
-  }
+  };
 
-  const getPreferenceStatus = (applicant: Application, preference: 'first' | 'second') => {
-    return preference === 'first' ? applicant.first_pref_status : applicant.second_pref_status
-  }
+  const getPreferenceStatus = (
+    applicant: Application,
+    preference: "first" | "second"
+  ) => {
+    return preference === "first"
+      ? applicant.first_pref_status
+      : applicant.second_pref_status;
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
       case "shortlisted":
-        return <Badge className="bg-green-500 hover:bg-green-600 text-white">Shortlisted</Badge>
+        return (
+          <Badge className="bg-blue-500 hover:bg-blue-600 text-white">
+            Shortlisted
+          </Badge>
+        );
       case "waitlisted":
-        return <Badge className="bg-blue-500 hover:bg-blue-600 text-white">Waitlisted</Badge>
+        return (
+          <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">
+            Waitlisted
+          </Badge>
+        );
       case "rejected":
-        return <Badge variant="destructive">Rejected</Badge>
+        return <Badge variant="destructive">Rejected</Badge>;
+      case "accepted":
+        return (
+          <Badge className="bg-green-500 hover:bg-green-600 text-white">
+            Accepted
+          </Badge>
+        );
       default:
-        return <Badge variant="secondary">Pending</Badge>
+        return <Badge variant="secondary">Pending</Badge>;
     }
-  }
+  };
 
   const getPreferenceType = (applicant: Application) => {
-    return applicant.first_pref_dept_id === deptId ? "first" : "second"
-  }
+    return applicant.first_pref_dept_id === deptId ? "first" : "second";
+  };
 
   const departmentStats = {
     totalApplicants: applicants.length,
-    firstPrefCount: applicants.filter((app) => app.first_pref_dept_id === deptId).length,
-    secondPrefCount: applicants.filter((app) => app.second_pref_dept_id === deptId).length,
-    pendingCount: applicants.filter((app) => getOverallApplicationStatus(app) === "pending").length,
-    shortlistedCount: applicants.filter((app) => getOverallApplicationStatus(app) === "shortlisted").length,
-    waitlistedCount: applicants.filter((app) => getOverallApplicationStatus(app) === "waitlisted").length,
-    rejectedCount: applicants.filter((app) => getOverallApplicationStatus(app) === "rejected").length,
-  }
+    firstPrefCount: applicants.filter(
+      (app) => app.first_pref_dept_id === deptId
+    ).length,
+    secondPrefCount: applicants.filter(
+      (app) => app.second_pref_dept_id === deptId
+    ).length,
+    pendingCount: applicants.filter(
+      (app) => getOverallApplicationStatus(app) === "pending"
+    ).length,
+    shortlistedCount: applicants.filter(
+      (app) => getOverallApplicationStatus(app) === "shortlisted"
+    ).length,
+    waitlistedCount: applicants.filter(
+      (app) => getOverallApplicationStatus(app) === "waitlisted"
+    ).length,
+    rejectedCount: applicants.filter(
+      (app) => getOverallApplicationStatus(app) === "rejected"
+    ).length,
+  };
 
   useEffect(() => {
     const fetchDeptNames = async () => {
@@ -158,16 +257,16 @@ export default function DepartmentPage() {
         const [first, second] = await Promise.all([
           getDepartmentNameById(selectedApplicant.first_pref_dept_id),
           getDepartmentNameById(selectedApplicant.second_pref_dept_id),
-        ])
-        setFirstPrefDeptName(first || selectedApplicant.first_pref_dept_id)
-        setSecondPrefDeptName(second || selectedApplicant.second_pref_dept_id)
+        ]);
+        setFirstPrefDeptName(first || selectedApplicant.first_pref_dept_id);
+        setSecondPrefDeptName(second || selectedApplicant.second_pref_dept_id);
       } else {
-        setFirstPrefDeptName("")
-        setSecondPrefDeptName("")
+        setFirstPrefDeptName("");
+        setSecondPrefDeptName("");
       }
-    }
-    fetchDeptNames()
-  }, [selectedApplicant])
+    };
+    fetchDeptNames();
+  }, [selectedApplicant]);
 
   if (isLoading) {
     return (
@@ -176,14 +275,14 @@ export default function DepartmentPage() {
           <div className="space-y-6 px-4">
             <div className="loading-shimmer h-8 w-64 rounded"></div>
             <div className="grid gap-4">
-              {[1, 2, 3].map(i => (
+              {[1, 2, 3].map((i) => (
                 <div key={i} className="loading-shimmer h-32 rounded-xl"></div>
               ))}
             </div>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -193,26 +292,40 @@ export default function DepartmentPage() {
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center gap-4 mb-4">
-              <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-muted-foreground hover:text-primary">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.back()}
+                className="text-muted-foreground hover:text-primary"
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Dashboard
               </Button>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Link href="/dashboard/recruiter" className="hover:text-primary">Dashboard</Link>
+                <Link
+                  href="/dashboard/recruiter"
+                  className="hover:text-primary"
+                >
+                  Dashboard
+                </Link>
                 <ChevronRight className="h-3 w-3" />
                 <span>Departments</span>
                 <ChevronRight className="h-3 w-3" />
                 <span className="text-foreground">{departmentName}</span>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4 mb-6">
               <div className="flex justify-center">
                 <HackClubLogo size="md" showText={false} />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-foreground">{departmentName} Department</h1>
-                <p className="text-muted-foreground">Manage applications for this department</p>
+                <h1 className="text-3xl font-bold text-foreground">
+                  {departmentName} Department
+                </h1>
+                <p className="text-muted-foreground">
+                  Manage applications for this department
+                </p>
               </div>
             </div>
           </div>
@@ -222,44 +335,58 @@ export default function DepartmentPage() {
             <div className="stats-card">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Applicants</p>
-                  <p className="text-2xl font-bold text-foreground">{departmentStats.totalApplicants}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Total Applicants
+                  </p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {departmentStats.totalApplicants}
+                  </p>
                 </div>
                 <div className="p-3 rounded-full bg-blue-500/20 border border-blue-500/50">
                   <User className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </div>
-            
+
             <div className="stats-card">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">First Preference</p>
-                  <p className="text-2xl font-bold text-primary">{departmentStats.firstPrefCount}</p>
+                  <p className="text-sm text-muted-foreground">
+                    First Preference
+                  </p>
+                  <p className="text-2xl font-bold text-primary">
+                    {departmentStats.firstPrefCount}
+                  </p>
                 </div>
                 <div className="p-3 rounded-full bg-primary/20 border border-primary/50">
                   <Star className="h-5 w-5 text-primary" />
                 </div>
               </div>
             </div>
-            
+
             <div className="stats-card">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Pending Review</p>
-                  <p className="text-2xl font-bold text-yellow-600">{departmentStats.pendingCount}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Pending Review
+                  </p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {departmentStats.pendingCount}
+                  </p>
                 </div>
                 <div className="p-3 rounded-full bg-yellow-500/20 border border-yellow-500/50">
                   <Filter className="h-5 w-5 text-yellow-400" />
                 </div>
               </div>
             </div>
-            
+
             <div className="stats-card">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Shortlisted</p>
-                  <p className="text-2xl font-bold text-green-600">{departmentStats.shortlistedCount}</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {departmentStats.shortlistedCount}
+                  </p>
                 </div>
                 <div className="p-3 rounded-full bg-green-500/20 border border-green-500/50">
                   <Download className="h-5 w-5 text-green-400" />
@@ -272,8 +399,12 @@ export default function DepartmentPage() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl font-semibold">Applicants for {departmentName}</CardTitle>
-                  <CardDescription className="text-base">Review and manage department applications</CardDescription>
+                  <CardTitle className="text-2xl font-semibold">
+                    Applicants for {departmentName}
+                  </CardTitle>
+                  <CardDescription className="text-base">
+                    Review and manage department applications
+                  </CardDescription>
                 </div>
                 <Button variant="outline" className="w-fit border-2">
                   <Download className="mr-2 h-4 w-4" />
@@ -281,7 +412,7 @@ export default function DepartmentPage() {
                 </Button>
               </div>
             </CardHeader>
-            
+
             <CardContent>
               {/* Filters */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
@@ -295,7 +426,10 @@ export default function DepartmentPage() {
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Select value={preferenceFilter} onValueChange={setPreferenceFilter}>
+                  <Select
+                    value={preferenceFilter}
+                    onValueChange={setPreferenceFilter}
+                  >
                     <SelectTrigger className="w-[140px] bg-input border-border">
                       <SelectValue placeholder="Preference" />
                     </SelectTrigger>
@@ -325,20 +459,30 @@ export default function DepartmentPage() {
                 {filteredApplicants.length === 0 ? (
                   <div className="text-center py-12">
                     <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-foreground mb-2">No applicants found</h3>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">
+                      No applicants found
+                    </h3>
                     <p className="text-muted-foreground">
-                      {searchQuery || statusFilter !== "all" || preferenceFilter !== "all"
+                      {searchQuery ||
+                      statusFilter !== "all" ||
+                      preferenceFilter !== "all"
                         ? "Try adjusting your filters to see more results."
                         : "Applications will appear here once students start applying."}
                     </p>
                   </div>
                 ) : (
                   filteredApplicants.map((applicant) => {
-                    const preferenceType = getPreferenceType(applicant)
-                    const currentStatus = getPreferenceStatus(applicant, preferenceType)
-                    
+                    const preferenceType = getPreferenceType(applicant);
+                    const currentStatus = getPreferenceStatus(
+                      applicant,
+                      preferenceType
+                    );
+
                     return (
-                      <Card key={applicant.id} className="neo-card transition-all duration-300 hover:scale-[1.02]">
+                      <Card
+                        key={applicant.id}
+                        className="neo-card transition-all duration-300 hover:scale-[1.02]"
+                      >
                         <CardContent className="p-6">
                           <div className="flex justify-between items-start">
                             <div className="flex-1 space-y-4">
@@ -350,12 +494,12 @@ export default function DepartmentPage() {
                                   <div>
                                     <button
                                       onClick={() => {
-                                        setSelectedApplicant(applicant)
-                                        setIsDialogOpen(true)
+                                        setSelectedApplicant(applicant);
+                                        setIsDialogOpen(true);
                                       }}
                                       className="text-lg font-semibold text-foreground hover:text-primary transition-colors text-left"
                                     >
-                                      {applicant.name || 'N/A'}
+                                      {applicant.name || "N/A"}
                                     </button>
                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                       <Mail className="h-3 w-3" />
@@ -370,9 +514,14 @@ export default function DepartmentPage() {
                                 <div className="flex items-center gap-3">
                                   <Badge
                                     variant="outline"
-                                    className={preferenceType === "first" ? "border-primary text-primary bg-primary/10" : ""}
+                                    className={
+                                      preferenceType === "first"
+                                        ? "border-primary text-primary bg-primary/10"
+                                        : ""
+                                    }
                                   >
-                                    {preferenceType === "first" ? "1st" : "2nd"} Preference
+                                    {preferenceType === "first" ? "1st" : "2nd"}{" "}
+                                    Preference
                                   </Badge>
                                   {getStatusBadge(currentStatus)}
                                 </div>
@@ -382,61 +531,213 @@ export default function DepartmentPage() {
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
-                                    onClick={() => handleStatusUpdate(applicant.id, 'shortlisted', preferenceType)}
-                                    disabled={currentStatus === 'shortlisted' || isUpdating}
-                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        applicant.id,
+                                        "accepted",
+                                        preferenceType
+                                      )
+                                    }
+                                    disabled={
+                                      currentStatus === "accepted" || isUpdating
+                                    }
+                                    className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20"
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        applicant.id,
+                                        "shortlisted",
+                                        preferenceType
+                                      )
+                                    }
+                                    disabled={
+                                      currentStatus === "shortlisted" ||
+                                      isUpdating
+                                    }
+                                    className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
                                   >
                                     Shortlist
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleStatusUpdate(applicant.id, 'waitlisted', preferenceType)}
-                                    disabled={currentStatus === 'waitlisted' || isUpdating}
-                                    className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        applicant.id,
+                                        "waitlisted",
+                                        preferenceType
+                                      )
+                                    }
+                                    disabled={
+                                      currentStatus === "waitlisted" ||
+                                      isUpdating
+                                    }
+                                    className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
                                   >
                                     Waitlist
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleStatusUpdate(applicant.id, 'rejected', preferenceType)}
-                                    disabled={currentStatus === 'rejected' || isUpdating}
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        applicant.id,
+                                        "rejected",
+                                        preferenceType
+                                      )
+                                    }
+                                    disabled={
+                                      currentStatus === "rejected" || isUpdating
+                                    }
                                     className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                                   >
                                     Reject
                                   </Button>
                                 </div>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  onClick={() => {
-                                    setSelectedApplicant(applicant)
-                                    setIsDialogOpen(true)
-                                  }}
-                                  className="border-2"
-                                >
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  View Details
-                                </Button>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedApplicant(applicant);
+                                      setIsMarksDialogOpen(true);
+                                    }}
+                                    className="border-2"
+                                  >
+                                    <NotebookText className="mr-2 h-4 w-4" />
+                                    View Marks
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedApplicant(applicant);
+                                      setIsDialogOpen(true);
+                                    }}
+                                    className="border-2"
+                                  >
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View Details
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </CardContent>
                       </Card>
-                    )
+                    );
                   })
                 )}
               </div>
             </CardContent>
           </Card>
 
+          {/* Applicant Marks Dialog */}
+          <Dialog open={isMarksDialogOpen} onOpenChange={setIsMarksDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
+              <DialogHeader>
+                <div className="flex justify-between p-3">
+                  <div>
+                    <DialogTitle className="text-xl font-semibold">
+                      Applicant Marks
+                    </DialogTitle>
+                    <DialogDescription>
+                      Marks and remarks for {selectedApplicant?.name}
+                    </DialogDescription>
+                  </div>
+                  {/* Accept and Reject Button */}
+                  {selectedApplicant && (
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={async () => {
+                          const preferenceType =
+                            getPreferenceType(selectedApplicant);
+                          const data = await handleStatusUpdate(
+                            selectedApplicant.id,
+                            "accepted",
+                            preferenceType
+                          );
+                          if (data) {
+                            setIsMarksDialogOpen(false);
+                            toast.success("Application accepted successfully");
+                          } else {
+                            toast.error("Failed to accept application");
+                          }
+                        }}
+                        variant="outline"
+                        className="border-2 border-green-600 hover:bg-green-600"
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          const preferenceType =
+                            getPreferenceType(selectedApplicant);
+                          const data = await handleStatusUpdate(
+                            selectedApplicant.id,
+                            "rejected",
+                            preferenceType
+                          );
+                          if (data) {
+                            setIsMarksDialogOpen(false);
+                            toast.success("Application rejected successfully");
+                          } else {
+                            toast.error("Failed to reject application");
+                          }
+                        }}
+                        variant="outline"
+                        className="border-2 border-red-600 hover:bg-red-600"
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </DialogHeader>
+
+              {selectedApplicant && evaluations.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Recruiter</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead>Remarks</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {evaluations.map((evaluation) => (
+                      <TableRow key={evaluation.recruiter.full_name}>
+                        <TableCell>{evaluation.recruiter.full_name}</TableCell>
+                        <TableCell>{evaluation.score}</TableCell>
+                        <TableCell>{evaluation.remarks}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-12">
+                  <p>No evaluations found !</p>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
           {/* Applicant Details Dialog */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
               <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">Applicant Details</DialogTitle>
-                <DialogDescription>Detailed information about {selectedApplicant?.name}</DialogDescription>
+                <DialogTitle className="text-xl font-semibold">
+                  Applicant Details
+                </DialogTitle>
+                <DialogDescription>
+                  Detailed information about {selectedApplicant?.name}
+                </DialogDescription>
               </DialogHeader>
 
               {selectedApplicant && (
@@ -451,65 +752,96 @@ export default function DepartmentPage() {
                       <p className="text-sm">{selectedApplicant.email}</p>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium">Register Number</Label>
+                      <Label className="text-sm font-medium">
+                        Register Number
+                      </Label>
                       <p className="text-sm">{selectedApplicant.register_no}</p>
                     </div>
                     <div>
                       <Label className="text-sm font-medium">Status</Label>
-                      <div className="mt-1">{getStatusBadge(getOverallApplicationStatus(selectedApplicant))}</div>
+                      <div className="mt-1">
+                        {getStatusBadge(
+                          getOverallApplicationStatus(selectedApplicant)
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-sm font-medium">First Preference</Label>
+                      <Label className="text-sm font-medium">
+                        First Preference
+                      </Label>
                       <p className="text-sm font-medium">{firstPrefDeptName}</p>
-                      <p className="text-sm text-muted-foreground mt-1">{selectedApplicant.first_pref_reason}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {selectedApplicant.first_pref_reason}
+                      </p>
                     </div>
 
                     <div>
-                      <Label className="text-sm font-medium">Second Preference</Label>
-                      <p className="text-sm font-medium">{secondPrefDeptName}</p>
-                      <p className="text-sm text-muted-foreground mt-1">{selectedApplicant.second_pref_reason}</p>
+                      <Label className="text-sm font-medium">
+                        Second Preference
+                      </Label>
+                      <p className="text-sm font-medium">
+                        {secondPrefDeptName}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {selectedApplicant.second_pref_reason}
+                      </p>
                     </div>
 
                     <div>
-                      <Label className="text-sm font-medium">Priority Reasoning</Label>
-                      <p className="text-sm text-muted-foreground">{selectedApplicant.priority_reason}</p>
+                      <Label className="text-sm font-medium">
+                        Priority Reasoning
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedApplicant.priority_reason}
+                      </p>
                     </div>
 
                     {selectedApplicant.portfolio_link && (
                       <div>
-                        <Label className="text-sm font-medium">Portfolio/Links</Label>
+                        <Label className="text-sm font-medium">
+                          Portfolio/Links
+                        </Label>
                         <div className="text-sm text-muted-foreground whitespace-pre-line">
-                          {selectedApplicant.portfolio_link.split("\n").map((link, index) => (
-                            <div key={index} className="flex items-center gap-2">
-                              {link.startsWith("http") ? (
-                                <>
-                                  <ExternalLink className="h-3 w-3" />
-                                  <a
-                                    href={link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-primary hover:underline"
-                                  >
-                                    {link}
-                                  </a>
-                                </>
-                              ) : (
-                                link
-                              )}
-                            </div>
-                          ))}
+                          {selectedApplicant.portfolio_link
+                            .split("\n")
+                            .map((link, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center gap-2"
+                              >
+                                {link.startsWith("http") ? (
+                                  <>
+                                    <ExternalLink className="h-3 w-3" />
+                                    <a
+                                      href={link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline"
+                                    >
+                                      {link}
+                                    </a>
+                                  </>
+                                ) : (
+                                  link
+                                )}
+                              </div>
+                            ))}
                         </div>
                       </div>
                     )}
 
                     <div>
-                      <Label className="text-sm font-medium">Submitted At</Label>
+                      <Label className="text-sm font-medium">
+                        Submitted At
+                      </Label>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-3 w-3" />
-                        {new Date(selectedApplicant.created_at).toLocaleString()}
+                        {new Date(
+                          selectedApplicant.created_at
+                        ).toLocaleString()}
                       </div>
                     </div>
                   </div>
@@ -521,8 +853,13 @@ export default function DepartmentPage() {
                   <Button
                     onClick={() => {
                       if (selectedApplicant) {
-                        const preferenceType = getPreferenceType(selectedApplicant)
-                        handleStatusUpdate(selectedApplicant.id, "shortlisted", preferenceType)
+                        const preferenceType =
+                          getPreferenceType(selectedApplicant);
+                        handleStatusUpdate(
+                          selectedApplicant.id,
+                          "shortlisted",
+                          preferenceType
+                        );
                       }
                     }}
                     disabled={isUpdating}
@@ -534,8 +871,13 @@ export default function DepartmentPage() {
                     variant="outline"
                     onClick={() => {
                       if (selectedApplicant) {
-                        const preferenceType = getPreferenceType(selectedApplicant)
-                        handleStatusUpdate(selectedApplicant.id, "waitlisted", preferenceType)
+                        const preferenceType =
+                          getPreferenceType(selectedApplicant);
+                        handleStatusUpdate(
+                          selectedApplicant.id,
+                          "waitlisted",
+                          preferenceType
+                        );
                       }
                     }}
                     disabled={isUpdating}
@@ -547,8 +889,13 @@ export default function DepartmentPage() {
                     variant="destructive"
                     onClick={() => {
                       if (selectedApplicant) {
-                        const preferenceType = getPreferenceType(selectedApplicant)
-                        handleStatusUpdate(selectedApplicant.id, "rejected", preferenceType)
+                        const preferenceType =
+                          getPreferenceType(selectedApplicant);
+                        handleStatusUpdate(
+                          selectedApplicant.id,
+                          "rejected",
+                          preferenceType
+                        );
                       }
                     }}
                     disabled={isUpdating}
@@ -562,5 +909,5 @@ export default function DepartmentPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
