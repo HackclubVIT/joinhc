@@ -1115,3 +1115,26 @@ export async function getApplicantMarks(
     return [];
   }
 }
+
+export const updateMeetLink = async (panel_id: string, meet_link: string) => {
+  const supabase = createClient();
+
+  try {
+    const { error } = await supabase
+      .from("recruitment_panel")
+      .update({ meet_link })
+      .eq("id", panel_id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating meet link:", error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Error in updateMeetLink:", err);
+    return false;
+  }
+};

@@ -16,6 +16,7 @@ import {
   checkIsEvaluatorOrRecruiter,
   getApplicantMarkByRecruiter,
   getPanelData,
+  updateMeetLink,
   updateOrCreateApplicantMark,
 } from "@/lib/supabase/data-fetching";
 import {
@@ -32,7 +33,7 @@ import {
   User,
 } from "lucide-react";
 import Link from "next/link";
-import { redirect, useRouter } from "next/navigation";
+import { redirect, useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -59,11 +60,8 @@ type Applicant = {
   created_at: string;
 };
 
-export default function PanelPage({
-  params,
-}: {
-  params: Promise<{ panelId: string }>;
-}) {
+export default function PanelPage() {
+  const { panelId }: { panelId: string } = useParams();
   const router = useRouter();
 
   const [panelData, setPanelData] = useState<PanelData>();
@@ -73,6 +71,8 @@ export default function PanelPage({
   const [isMarkDialogOpen, setIsMarkDialogOpen] = useState(false);
   const [score, setScore] = useState<number | null>(null);
   const [remark, setRemark] = useState<string>("");
+  const [meetLink, setMeetLink] = useState<string>("");
+  const [meetLinkEditable, setMeetLinkEditable] = useState(false);
 
   useEffect(() => {
     if (isMarkDialogOpen && selectedApplicant?.id && panelData?.department_id) {
@@ -90,10 +90,11 @@ export default function PanelPage({
 
   useEffect(() => {
     const fetchData = async () => {
-      const { panelId } = await params;
       const valid = await checkIsEvaluatorOrRecruiter(panelId);
       if (!valid) redirect("/recruiter");
-      setPanelData(await getPanelData(panelId));
+      const data = await getPanelData(panelId);
+      setPanelData(data);
+      setMeetLink(data?.meet_link || "");
     };
 
     fetchData();
@@ -218,10 +219,51 @@ export default function PanelPage({
           <Card className="neo-card">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
+                <div className="flex justify-between w-full">
                   <CardTitle className="text-2xl font-semibold">
                     Applicants
                   </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Enter Meet link"
+                      className="bg-input border-border border-2"
+                      disabled={!meetLinkEditable}
+                      value={meetLink}
+                      onChange={(e) => setMeetLink(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      {meetLink && !meetLinkEditable && (
+                        <a
+                          target="_blank"
+                          className="cursor-pointer text-sm bg-red-500 rounded-sm w-24 flex justify-center items-center"
+                          href={meetLink}
+                        >
+                          <p>Join Meet</p>
+                        </a>
+                      )}
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          if (!meetLinkEditable) {
+                            setMeetLinkEditable(true);
+                          } else {
+                            if (await updateMeetLink(panelId, meetLink)) {
+                              toast.success("Meet link updated successfully");
+                            } else {
+                              toast.error("Failed to update meet link");
+                            }
+                            setMeetLinkEditable(false);
+                          }
+                        }}
+                      >
+                        {meetLinkEditable
+                          ? "Save Link"
+                          : meetLink
+                          ? "Update Link"
+                          : "Add Link"}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardHeader>
