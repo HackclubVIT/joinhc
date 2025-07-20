@@ -4,10 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -45,7 +43,6 @@ export default function ApplicantDashboard() {
     first: string;
     second: string;
   }>({ first: "", second: "" });
-  const [selectedDepartment, setSelectedDepartment] = useState<string>("");
   const supabase = createClient();
 
   useEffect(() => {
@@ -78,21 +75,6 @@ export default function ApplicantDashboard() {
             first: firstDeptName,
             second: secondDeptName,
           });
-
-          // For shortlisted users, determine which department they were selected for
-          // This logic should be updated based on your business rules
-          if (applicationData.status === "shortlisted") {
-            // For now, assuming first preference is selected
-            // You should implement proper logic to track which department was selected
-            // This could be based on:
-            // 1. A separate field in the database (selected_department_id)
-            // 2. Which recruiter updated the status
-            // 3. Business rules (always first preference, etc.)
-
-            // For this example, let's assume it's always first preference
-            // You should modify this logic based on your requirements
-            setSelectedDepartment(firstDeptName);
-          }
         }
 
         if (settingsData?.deadline) {
@@ -116,10 +98,12 @@ export default function ApplicantDashboard() {
     switch (status) {
       case "pending":
         return "bg-yellow-500";
-      case "shortlisted":
+      case "accepted":
         return "bg-green-500";
-      case "waitlisted":
+      case "shortlisted":
         return "bg-blue-500";
+      case "waitlisted":
+        return "bg-yello-500";
       case "rejected":
         return "bg-red-500";
       default:
@@ -130,6 +114,8 @@ export default function ApplicantDashboard() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "shortlisted":
+        return <CheckCircle className="h-4 w-4 text-white" />;
+      case "accepted":
         return <CheckCircle className="h-4 w-4 text-white" />;
       case "pending":
         return <Clock className="h-4 w-4 text-white" />;
@@ -142,13 +128,19 @@ export default function ApplicantDashboard() {
     const overallStatus = getOverallApplicationStatus(application);
     const selectedInfo = getPreferenceSelectionInfo(application);
 
+    const bothAccepted =
+      application.first_pref_status === "accepted" &&
+      application.second_pref_status === "accepted";
+
     // Check if both preferences are shortlisted
     const bothShortlisted =
       application.first_pref_status === "shortlisted" &&
       application.second_pref_status === "shortlisted";
 
     let selectedDepartment = null;
-    if (bothShortlisted) {
+    if (bothAccepted) {
+      selectedDepartment = `both ${departmentNames.first} and ${departmentNames.second}`;
+    } else if (bothShortlisted) {
       selectedDepartment = `both ${departmentNames.first} and ${departmentNames.second}`;
     } else if (selectedInfo.type === "first") {
       selectedDepartment = departmentNames.first;
@@ -157,6 +149,19 @@ export default function ApplicantDashboard() {
     }
 
     switch (overallStatus) {
+      case "accepted":
+        return {
+          title: bothShortlisted
+            ? "Congratulations! You've been accepted for both preferences! 🎉🎉"
+            : "Congratulations! You've been accepted 🎉",
+          description: selectedDepartment
+            ? bothShortlisted
+              ? `Amazing! You have been accepted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}. You'll need to choose which department to join.`
+              : `You have been accepted for ${selectedDepartment}.`
+            : "You have been accepted!",
+          color: "text-green-600 dark:text-green-400",
+        };
+
       case "shortlisted":
         return {
           title: bothShortlisted
@@ -164,9 +169,9 @@ export default function ApplicantDashboard() {
             : "Congratulations! You've been shortlisted 🎉",
           description: selectedDepartment
             ? bothShortlisted
-              ? `Amazing! You have been shortlisted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}. You'll need to choose which department to join. Check your email for next steps.`
-              : `You have been shortlisted for ${selectedDepartment}. Check your email for next steps.`
-            : "You have been shortlisted! Check your email for next steps.",
+              ? `Amazing! You have been shortlisted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}. You'll need to choose which department to join.`
+              : `You have been shortlisted for ${selectedDepartment}.`
+            : "You have been shortlisted!",
           color: "text-green-600 dark:text-green-400",
         };
       case "waitlisted":
@@ -270,8 +275,8 @@ export default function ApplicantDashboard() {
                         0,
                         Math.ceil(
                           (deadline.getTime() - today.getTime()) /
-                            (1000 * 60 * 60 * 24),
-                        ),
+                            (1000 * 60 * 60 * 24)
+                        )
                       )
                     : "—"}
                 </div>
@@ -303,11 +308,12 @@ export default function ApplicantDashboard() {
             <div className="stats-card">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-2xl font-black gradient-text">
-                  {overallStatus === "shortlisted"
+                  {overallStatus === "shortlisted" ||
+                  overallStatus === "accepted"
                     ? "🎉"
                     : overallStatus === "pending"
-                      ? "⏳"
-                      : "📝"}
+                    ? "⏳"
+                    : "📝"}
                 </div>
                 <div className="p-2 rounded-xl bg-orange-500/20">
                   <Target className="h-4 w-4 text-orange-400" />
@@ -357,13 +363,14 @@ export default function ApplicantDashboard() {
                     <div className="flex items-center gap-4">
                       <div
                         className={`p-3 rounded-2xl ${
-                          overallStatus === "shortlisted"
+                          overallStatus === "shortlisted" ||
+                          overallStatus === "accepted"
                             ? "bg-green-500/20 border border-green-500/30"
                             : overallStatus === "waitlisted"
-                              ? "bg-blue-500/20 border border-blue-500/30"
-                              : overallStatus === "rejected"
-                                ? "bg-red-500/20 border border-red-500/30"
-                                : "bg-yellow-500/20 border border-yellow-500/30"
+                            ? "bg-blue-500/20 border border-blue-500/30"
+                            : overallStatus === "rejected"
+                            ? "bg-red-500/20 border border-red-500/30"
+                            : "bg-yellow-500/20 border border-yellow-500/30"
                         }`}
                       >
                         {getStatusIcon(overallStatus)}
@@ -372,18 +379,30 @@ export default function ApplicantDashboard() {
                         <div className="flex items-center gap-3 mb-2">
                           <Badge
                             className={`px-3 py-1 rounded-full ${
-                              overallStatus === "shortlisted"
+                              overallStatus === "shortlisted" ||
+                              overallStatus === "accepted"
                                 ? "status-shortlisted"
                                 : overallStatus === "waitlisted"
-                                  ? "status-waitlisted"
-                                  : overallStatus === "rejected"
-                                    ? "status-rejected"
-                                    : "status-pending"
+                                ? "status-waitlisted"
+                                : overallStatus === "rejected"
+                                ? "status-rejected"
+                                : "status-pending"
                             }`}
                           >
                             {overallStatus.charAt(0).toUpperCase() +
                               overallStatus.slice(1)}
                           </Badge>
+                          {overallStatus === "accepted" && (
+                            <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0">
+                              {application.first_pref_status === "accepted" &&
+                              application.second_pref_status === "accepted"
+                                ? "Both Departments!"
+                                : getPreferenceSelectionInfo(application)
+                                    .type === "first"
+                                ? departmentNames.first
+                                : departmentNames.second}
+                            </Badge>
+                          )}
                           {overallStatus === "shortlisted" && (
                             <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0">
                               {application.first_pref_status ===
@@ -391,16 +410,16 @@ export default function ApplicantDashboard() {
                               application.second_pref_status === "shortlisted"
                                 ? "Both Departments!"
                                 : getPreferenceSelectionInfo(application)
-                                      .type === "first"
-                                  ? departmentNames.first
-                                  : departmentNames.second}
+                                    .type === "first"
+                                ? departmentNames.first
+                                : departmentNames.second}
                             </Badge>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           Submitted:{" "}
                           {new Date(
-                            application.created_at,
+                            application.created_at
                           ).toLocaleDateString()}
                         </p>
                       </div>
@@ -410,13 +429,14 @@ export default function ApplicantDashboard() {
                     {statusInfo && (
                       <div
                         className={`neo-card p-4 ${
-                          overallStatus === "shortlisted"
+                          overallStatus === "shortlisted" ||
+                          overallStatus === "accepted"
                             ? "bg-green-500/10 border-green-500/30"
                             : overallStatus === "waitlisted"
-                              ? "bg-blue-500/10 border-blue-500/30"
-                              : overallStatus === "rejected"
-                                ? "bg-red-500/10 border-red-500/30"
-                                : "bg-yellow-500/10 border-yellow-500/30"
+                            ? "bg-blue-500/10 border-blue-500/30"
+                            : overallStatus === "rejected"
+                            ? "bg-red-500/10 border-red-500/30"
+                            : "bg-yellow-500/10 border-yellow-500/30"
                         }`}
                       >
                         <h4 className={`font-bold ${statusInfo.color} mb-2`}>
@@ -522,13 +542,14 @@ export default function ApplicantDashboard() {
                     <div className="space-y-4">
                       <div
                         className={`p-6 rounded-xl border-l-4 ${
-                          application.first_pref_status === "shortlisted"
+                          application.first_pref_status === "shortlisted" ||
+                          application.first_pref_status === "accepted"
                             ? "bg-gradient-to-r from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-500"
                             : application.first_pref_status === "waitlisted"
-                              ? "bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-500"
-                              : application.first_pref_status === "rejected"
-                                ? "bg-gradient-to-r from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-500"
-                                : "bg-gradient-to-r from-primary/10 to-primary/5 border-primary"
+                            ? "bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-500"
+                            : application.first_pref_status === "rejected"
+                            ? "bg-gradient-to-r from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-500"
+                            : "bg-gradient-to-r from-primary/10 to-primary/5 border-primary"
                         }`}
                       >
                         <div className="flex justify-between items-center mb-2">
@@ -537,6 +558,11 @@ export default function ApplicantDashboard() {
                           </span>
                           <div className="flex items-center gap-2">
                             <Badge className="bg-primary text-white">1st</Badge>
+                            {application.first_pref_status === "accepted" && (
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                ✓ Accepted
+                              </Badge>
+                            )}
                             {application.first_pref_status ===
                               "shortlisted" && (
                               <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
@@ -567,13 +593,14 @@ export default function ApplicantDashboard() {
 
                       <div
                         className={`p-6 rounded-xl border-l-4 ${
-                          application.second_pref_status === "shortlisted"
-                            ? "bg-gradient-to-r from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-500"
+                          application.second_pref_status === "shortlisted" ||
+                          application.second_pref_status === "accepted"
+                            ? "bg-green-500 bg-opacity-50"
                             : application.second_pref_status === "waitlisted"
-                              ? "bg-gradient-to-r from-blue-50 to blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-500"
-                              : application.second_pref_status === "rejected"
-                                ? "bg-gradient-to-r from-red-50 to red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-500"
-                                : "bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 border-gray-300 dark:border-gray-600"
+                            ? "bg-gradient-to-r from-blue-50 to blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-500"
+                            : application.second_pref_status === "rejected"
+                            ? "bg-gradient-to-r from-red-50 to red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-500"
+                            : "bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 border-gray-300 dark:border-gray-600"
                         }`}
                       >
                         <div className="flex justify-between items-center mb-2">
@@ -582,6 +609,11 @@ export default function ApplicantDashboard() {
                           </span>
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary">2nd</Badge>
+                            {application.second_pref_status === "accepted" && (
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                ✓ Accepted
+                              </Badge>
+                            )}
                             {application.second_pref_status ===
                               "shortlisted" && (
                               <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">

@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   checkIsEvaluatorOrRecruiter,
-  getApplicantMarks,
+  getApplicantMarkByRecruiter,
   getPanelData,
   updateOrCreateApplicantMark,
 } from "@/lib/supabase/data-fetching";
@@ -76,14 +76,15 @@ export default function PanelPage({
 
   useEffect(() => {
     if (isMarkDialogOpen && selectedApplicant?.id && panelData?.department_id) {
-      getApplicantMarks(selectedApplicant?.id, panelData?.department_id).then(
-        (res) => {
-          if (res) {
-            setScore(res.score);
-            setRemark(res.remarks);
-          }
+      getApplicantMarkByRecruiter(
+        selectedApplicant?.id,
+        panelData?.department_id
+      ).then((res) => {
+        if (res) {
+          setScore(res.score);
+          setRemark(res.remarks);
         }
-      );
+      });
     }
   }, [isMarkDialogOpen]);
 

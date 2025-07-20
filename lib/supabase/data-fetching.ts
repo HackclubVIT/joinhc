@@ -8,10 +8,20 @@ export type Application = {
   applicant_id: string;
   first_pref_dept_id: string;
   first_pref_reason: string;
-  first_pref_status: "pending" | "shortlisted" | "waitlisted" | "rejected";
+  first_pref_status:
+    | "pending"
+    | "shortlisted"
+    | "waitlisted"
+    | "rejected"
+    | "accepted";
   second_pref_dept_id: string;
   second_pref_reason: string;
-  second_pref_status: "pending" | "shortlisted" | "waitlisted" | "rejected";
+  second_pref_status:
+    | "pending"
+    | "shortlisted"
+    | "waitlisted"
+    | "rejected"
+    | "accepted";
   priority_reason: string;
   portfolio_link: string | null;
   created_at: string;
@@ -557,8 +567,16 @@ export async function updateApplicationStatus(
 // Helper function to get overall application status based on preferences
 export function getOverallApplicationStatus(
   application: Application
-): "pending" | "shortlisted" | "waitlisted" | "rejected" {
+): "pending" | "shortlisted" | "waitlisted" | "rejected" | "accepted" {
   // If either preference is shortlisted, overall is shortlisted
+
+  if (
+    application.first_pref_status === "accepted" ||
+    application.second_pref_status === "accepted"
+  ) {
+    return "accepted";
+  }
+
   if (
     application.first_pref_status === "shortlisted" ||
     application.second_pref_status === "shortlisted"
@@ -591,8 +609,22 @@ export function getPreferenceSelectionInfo(application: Application): {
   type: "first" | "second" | "both" | null;
   status: string;
 } {
+  const firstAccepted = application.first_pref_status === "accepted";
+  const secondAccepted = application.second_pref_status === "accepted";
+
   const firstShortlisted = application.first_pref_status === "shortlisted";
   const secondShortlisted = application.second_pref_status === "shortlisted";
+
+  if (firstAccepted && secondAccepted) {
+    return { type: "both", status: "accepted" };
+  }
+
+  if (firstAccepted) {
+    return { type: "first", status: "accepted" };
+  }
+  if (secondAccepted) {
+    return { type: "second", status: "accepted" };
+  }
 
   if (firstShortlisted && secondShortlisted) {
     return { type: "both", status: "shortlisted" };
@@ -1028,7 +1060,7 @@ export async function updateOrCreateApplicantMark(
   }
 }
 
-export async function getApplicantMarks(
+export async function getApplicantMarkByRecruiter(
   application_id: string,
   department_id: string
 ): Promise<{ score: number; remarks: string } | null> {
@@ -1052,5 +1084,34 @@ export async function getApplicantMarks(
   } catch (err) {
     console.error("Error in getApplicantMarks:", err);
     return null;
+  }
+}
+
+export async function getApplicantMarks(
+  application_id: string,
+  department_id: string
+): Promise<{ score: number; remarks: string; recruiter: any }[]> {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("evaluations")
+      .select("score, remarks, profile:profiles(full_name)")
+      .eq("application_id", application_id)
+      .eq("department_id", department_id);
+
+    if (error) {
+      console.error("Error fetching applicant marks:", error);
+      return [];
+    }
+
+    return data.map((item) => ({
+      score: item.score,
+      remarks: item.remarks,
+      recruiter: item.profile,
+    }));
+  } catch (err) {
+    console.error("Error in getApplicantMarks:", err);
+    return [];
   }
 }

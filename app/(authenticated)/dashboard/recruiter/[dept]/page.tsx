@@ -42,6 +42,9 @@ import {
   Hash,
   Calendar,
   ExternalLink,
+  Receipt,
+  NotebookPen,
+  NotebookText,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -50,8 +53,18 @@ import {
   updateApplicationStatus,
   getOverallApplicationStatus,
   type Application,
+  getApplicantMarks,
 } from "@/lib/supabase/data-fetching";
 import { HackClubLogo } from "@/components/hackclub-logo";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
 
 export default function DepartmentPage() {
   const params = useParams();
@@ -71,10 +84,25 @@ export default function DepartmentPage() {
   const [selectedApplicant, setSelectedApplicant] =
     useState<Application | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isMarksDialogOpen, setIsMarksDialogOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("");
   const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("");
+
+  const [evaluations, setEvaluations] = useState<
+    { score: number; remarks: string; recruiter: { full_name: string } }[]
+  >([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (selectedApplicant) {
+        setEvaluations(await getApplicantMarks(selectedApplicant.id, deptId));
+      }
+    };
+
+    fetchData();
+  }, [isMarksDialogOpen]);
 
   useEffect(() => {
     const fetchDeptName = async () => {
@@ -135,7 +163,11 @@ export default function DepartmentPage() {
 
     setIsUpdating(true);
     try {
-      await updateApplicationStatus(applicationId, newStatus, preference);
+      const data = await updateApplicationStatus(
+        applicationId,
+        newStatus,
+        preference
+      );
 
       setApplicants((prev) =>
         prev.map((app) => {
@@ -149,6 +181,7 @@ export default function DepartmentPage() {
           return app;
         })
       );
+      return data;
     } catch (err) {
       console.error("Error updating status:", err);
     } finally {
@@ -169,18 +202,24 @@ export default function DepartmentPage() {
     switch (status.toLowerCase()) {
       case "shortlisted":
         return (
-          <Badge className="bg-green-500 hover:bg-green-600 text-white">
+          <Badge className="bg-blue-500 hover:bg-blue-600 text-white">
             Shortlisted
           </Badge>
         );
       case "waitlisted":
         return (
-          <Badge className="bg-blue-500 hover:bg-blue-600 text-white">
+          <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">
             Waitlisted
           </Badge>
         );
       case "rejected":
         return <Badge variant="destructive">Rejected</Badge>;
+      case "accepted":
+        return (
+          <Badge className="bg-green-500 hover:bg-green-600 text-white">
+            Accepted
+          </Badge>
+        );
       default:
         return <Badge variant="secondary">Pending</Badge>;
     }
@@ -492,6 +531,24 @@ export default function DepartmentPage() {
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        applicant.id,
+                                        "accepted",
+                                        preferenceType
+                                      )
+                                    }
+                                    disabled={
+                                      currentStatus === "accepted" || isUpdating
+                                    }
+                                    className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20"
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
                                     onClick={() =>
                                       handleStatusUpdate(
                                         applicant.id,
@@ -503,7 +560,7 @@ export default function DepartmentPage() {
                                       currentStatus === "shortlisted" ||
                                       isUpdating
                                     }
-                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
                                   >
                                     Shortlist
                                   </Button>
@@ -521,7 +578,7 @@ export default function DepartmentPage() {
                                       currentStatus === "waitlisted" ||
                                       isUpdating
                                     }
-                                    className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                                    className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
                                   >
                                     Waitlist
                                   </Button>
@@ -543,18 +600,32 @@ export default function DepartmentPage() {
                                     Reject
                                   </Button>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedApplicant(applicant);
-                                    setIsDialogOpen(true);
-                                  }}
-                                  className="border-2"
-                                >
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  View Details
-                                </Button>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedApplicant(applicant);
+                                      setIsMarksDialogOpen(true);
+                                    }}
+                                    className="border-2"
+                                  >
+                                    <NotebookText className="mr-2 h-4 w-4" />
+                                    View Marks
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedApplicant(applicant);
+                                      setIsDialogOpen(true);
+                                    }}
+                                    className="border-2"
+                                  >
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View Details
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -566,6 +637,96 @@ export default function DepartmentPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Applicant Marks Dialog */}
+          <Dialog open={isMarksDialogOpen} onOpenChange={setIsMarksDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
+              <DialogHeader>
+                <div className="flex justify-between p-3">
+                  <div>
+                    <DialogTitle className="text-xl font-semibold">
+                      Applicant Marks
+                    </DialogTitle>
+                    <DialogDescription>
+                      Marks and remarks for {selectedApplicant?.name}
+                    </DialogDescription>
+                  </div>
+                  {/* Accept and Reject Button */}
+                  {selectedApplicant && (
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={async () => {
+                          const preferenceType =
+                            getPreferenceType(selectedApplicant);
+                          const data = await handleStatusUpdate(
+                            selectedApplicant.id,
+                            "accepted",
+                            preferenceType
+                          );
+                          if (data) {
+                            setIsMarksDialogOpen(false);
+                            toast.success("Application accepted successfully");
+                          } else {
+                            toast.error("Failed to accept application");
+                          }
+                        }}
+                        variant="outline"
+                        className="border-2 border-green-600 hover:bg-green-600"
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          const preferenceType =
+                            getPreferenceType(selectedApplicant);
+                          const data = await handleStatusUpdate(
+                            selectedApplicant.id,
+                            "rejected",
+                            preferenceType
+                          );
+                          if (data) {
+                            setIsMarksDialogOpen(false);
+                            toast.success("Application rejected successfully");
+                          } else {
+                            toast.error("Failed to reject application");
+                          }
+                        }}
+                        variant="outline"
+                        className="border-2 border-red-600 hover:bg-red-600"
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </DialogHeader>
+
+              {selectedApplicant && evaluations.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Recruiter</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead>Remarks</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {evaluations.map((evaluation) => (
+                      <TableRow key={evaluation.recruiter.full_name}>
+                        <TableCell>{evaluation.recruiter.full_name}</TableCell>
+                        <TableCell>{evaluation.score}</TableCell>
+                        <TableCell>{evaluation.remarks}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-12">
+                  <p>No evaluations found !</p>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* Applicant Details Dialog */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
