@@ -42,9 +42,10 @@ import {
   Hash,
   Calendar,
   ExternalLink,
-  Receipt,
   NotebookPen,
   NotebookText,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -54,6 +55,12 @@ import {
   getOverallApplicationStatus,
   type Application,
   getApplicantMarks,
+  getPanelByDepartment,
+  createPanel,
+  getPanelMembers,
+  getRecruiterByDepartment,
+  addRecruiterToPanel,
+  removeRecruiterFromPanel,
 } from "@/lib/supabase/data-fetching";
 import { HackClubLogo } from "@/components/hackclub-logo";
 import {
@@ -85,14 +92,53 @@ export default function DepartmentPage() {
     useState<Application | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isMarksDialogOpen, setIsMarksDialogOpen] = useState(false);
+  const [isNewPanelDialogOpen, setIsNewPanelDialogOpen] = useState(false);
+  const [isPanelMembersDialogOpen, setIsPanelMembersDialogOpen] =
+    useState(false);
+  const [selectedPanel, setSelectedPanel] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [panelMembers, setPanelMembers] = useState<
+    { id: string; name: string; email: string }[]
+  >([]);
+
+  const [departmentRecruiters, setDepartmentRecruiters] = useState<
+    { id: string; name: string; email: string }[]
+  >([]);
+
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("");
   const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("");
 
+  const [panels, setPanels] = useState<{ id: string; name: string }[]>([]);
+
   const [evaluations, setEvaluations] = useState<
     { score: number; remarks: string; recruiter: { full_name: string } }[]
   >([]);
+
+  const fetchPanelMembers = async () => {
+    if (selectedPanel) {
+      const members = await getPanelMembers(selectedPanel.id);
+      setPanelMembers(members);
+      setDepartmentRecruiters(
+        (await getRecruiterByDepartment(deptId)).filter(
+          (item) => item.panel_id === null
+        )
+      );
+    }
+  };
+
+  useEffect(() => {
+    fetchPanelMembers();
+  }, [selectedPanel]);
+
+  useEffect(() => {
+    if (panelMembers.length > 0) return;
+    // Fetch panel members only if they are not already fetched or if new panel is selected
+    fetchPanelMembers();
+  }, [panelMembers]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -103,6 +149,21 @@ export default function DepartmentPage() {
 
     fetchData();
   }, [isMarksDialogOpen]);
+
+  useEffect(() => {
+    if (panels.length > 0) return;
+    // Fetch panels only if they are not already fetched or if new panel is added
+    const fetchPanels = async () => {
+      try {
+        const data = await getPanelByDepartment(deptId);
+        setPanels(data);
+      } catch (err) {
+        console.error("Error fetching panels:", err);
+      }
+    };
+
+    fetchPanels();
+  }, [panels]);
 
   useEffect(() => {
     const fetchDeptName = async () => {
@@ -395,6 +456,72 @@ export default function DepartmentPage() {
             </div>
           </div>
 
+          <Card className="neo-card mb-8">
+            <CardHeader className="flex flex-row justify-between">
+              <div>
+                <CardTitle>Panels for {departmentName}</CardTitle>
+                <CardDescription className="text-base">
+                  Manage panels and for this department
+                </CardDescription>
+              </div>
+              <div>
+                <Button
+                  variant="outline"
+                  className="w-fit border-2"
+                  onClick={async () => {
+                    setIsNewPanelDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  New Panel
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {panels.length === 0 ? (
+                  <div className="text-center py-12">
+                    <NotebookText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-foreground mb-2">
+                      No panels found
+                    </h3>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {panels.map((panel) => (
+                      <Card key={panel.id} className="neo-card">
+                        <CardContent className="p-2">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 flex items-center justify-center">
+                                <NotebookText className="h-6 w-6 text-primary" />
+                              </div>
+                              <div>
+                                <p className="text-lg">{panel.name}</p>
+                              </div>
+                            </div>
+                            <div>
+                              <Button
+                                variant="outline"
+                                className="h-12 w-12"
+                                onClick={() => {
+                                  setSelectedPanel(panel);
+                                  setIsPanelMembersDialogOpen(true);
+                                }}
+                              >
+                                <NotebookPen className="h-5 w-5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="neo-card">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -637,6 +764,136 @@ export default function DepartmentPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Panel Members Dialog */}
+          <Dialog
+            open={isPanelMembersDialogOpen}
+            onOpenChange={setIsPanelMembersDialogOpen}
+          >
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-semibold">
+                  Panel Members
+                </DialogTitle>
+                <DialogDescription>
+                  Manage panel members for {selectedPanel?.name}
+                </DialogDescription>
+              </DialogHeader>
+              <Select
+                onValueChange={async (value) => {
+                  if (selectedPanel) {
+                    const res = await addRecruiterToPanel(
+                      value,
+                      deptId,
+                      selectedPanel?.id
+                    );
+                    if (res) {
+                      toast.success("Recruiter added to panel successfully");
+                      setPanelMembers([]);
+                    } else {
+                      toast.error("Failed to add recruiter to panel");
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger className="">
+                  <SelectValue placeholder="Add Recruiters" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentRecruiters.map((recruiter) => (
+                    <SelectItem value={recruiter.id} key={recruiter.id}>
+                      {recruiter.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Remove</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {panelMembers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={2} className="text-center py-12">
+                        No members found in this panel
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    panelMembers.map((member) => (
+                      <TableRow key={member.id}>
+                        <TableCell>{member.name}</TableCell>
+                        <TableCell>{member.email}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            onClick={async () => {
+                              if (!selectedPanel?.id) return;
+                              const res = await removeRecruiterFromPanel(
+                                member.id,
+                                selectedPanel?.id
+                              );
+                              if (res) {
+                                toast.success("Recruiter removed from panel");
+                                setPanelMembers((prev) =>
+                                  prev.filter((m) => m.id !== member.id)
+                                );
+                              } else {
+                                toast.error("Failed to remove recruiter");
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </DialogContent>
+          </Dialog>
+
+          {/* New Panel Dialog */}
+          <Dialog
+            open={isNewPanelDialogOpen}
+            onOpenChange={setIsNewPanelDialogOpen}
+          >
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-semibold">
+                  New Panel
+                </DialogTitle>
+                <DialogDescription>
+                  Create a new panel for {departmentName} department
+                </DialogDescription>
+              </DialogHeader>
+              <form
+                action={async (e) => {
+                  const panelName = e.get("new_panel_name")?.toString();
+                  console.log("Creating panel with name:", panelName);
+                  if (panelName) {
+                    const data = await createPanel(panelName, deptId);
+                    if (data) {
+                      setIsNewPanelDialogOpen(false);
+                      toast.success("New panel created successfully");
+                      setPanels([]); // Clear panels to refetch
+                    } else {
+                      toast.error("Failed to create new panel");
+                    }
+                  }
+                }}
+              >
+                <Input placeholder="Panel Name" name="new_panel_name" />
+                <Button type="submit" className="mt-4 w-full">
+                  Create
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
 
           {/* Applicant Marks Dialog */}
           <Dialog open={isMarksDialogOpen} onOpenChange={setIsMarksDialogOpen}>

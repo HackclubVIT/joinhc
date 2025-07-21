@@ -10,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Users,
@@ -33,7 +32,7 @@ import {
   getDepartmentNameById,
   getApplicationSettings,
   isCurrentUserRecruiter,
-  getPanels,
+  getPanelsForRecruiter,
 } from "@/lib/supabase/data-fetching";
 import { useAuth } from "@/contexts/auth-context";
 import { HackClubLogo } from "@/components/hackclub-logo";
@@ -104,7 +103,7 @@ export default function RecruiterDashboard() {
           totalRejected: 0,
         };
 
-        setPanels(await getPanels(recruiterDepts[0].recruiter_id));
+        setPanels(await getPanelsForRecruiter(recruiterDepts[0].recruiter_id));
         for (const dept of recruiterDepts) {
           if (dept.department_id) {
             const [applicants, deptName] = await Promise.all([
