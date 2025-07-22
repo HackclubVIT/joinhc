@@ -866,7 +866,7 @@ export async function verifyTokenHash(tokenHash: string, type: string) {
   }
 }
 
-export async function getPanels(departmentId: string) {
+export async function getPanelsForRecruiter(departmentId: string) {
   const supabase = createClient();
 
   function normalizeUuid(str: string) {
@@ -1136,5 +1136,175 @@ export const updateMeetLink = async (panel_id: string, meet_link: string) => {
   } catch (err) {
     console.error("Error in updateMeetLink:", err);
     return false;
+  }
+};
+
+export const getPanelByDepartment = async (department_id: string) => {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruitment_panel")
+      .select()
+      .eq("department_id", department_id);
+
+    if (error) {
+      console.error("Error fetching panel by department:", error);
+      return [];
+    }
+
+    return data as { id: string; name: string; meet_link: string }[];
+  } catch (err) {
+    console.error("Error in getPanelByDepartment:", err);
+    return [];
+  }
+};
+
+export const createPanel = async (name: string, department_id: string) => {
+  const supabase = createClient();
+
+  try {
+    const { error } = await supabase.from("recruitment_panel").insert({
+      name,
+      department_id,
+    });
+
+    if (error) {
+      console.error("Error creating panel:", error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Error in createPanel:", err);
+    return false;
+  }
+};
+
+export const getPanelMembers = async (panel_id: string) => {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruiter_departments")
+      .select("profiles:profiles(id, full_name, email)")
+      .eq("panel_id", panel_id);
+
+    if (error) {
+      console.error("Error fetching panel members:", error);
+      return [];
+    }
+
+    return data.map((item: any) => ({
+      id: item.profiles.id,
+      name: item.profiles.full_name,
+      email: item.profiles.email,
+    }));
+  } catch (err) {
+    console.error("Error in getPanelMembers:", err);
+    return [];
+  }
+};
+
+export const getRecruiterByDepartment = async (department_id: string) => {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruiter_departments")
+      .select("recruiter_id, panel_id, profiles:profiles(full_name, email)")
+      .eq("department_id", department_id);
+
+    if (error) {
+      console.error("Error fetching recruiters by department:", error);
+      return [];
+    }
+
+    return data.map((item: any) => ({
+      id: item.recruiter_id,
+      name: item.profiles.full_name,
+      email: item.profiles.email,
+      panel_id: item.panel_id,
+    }));
+  } catch (err) {
+    console.error("Error in getRecruiterByDepartment:", err);
+    return [];
+  }
+};
+
+export const addRecruiterToPanel = async (
+  recruiter_id: string,
+  department_id: string,
+  panel_id: string
+) => {
+  const supabase = createClient();
+
+  try {
+    const { error } = await supabase
+      .from("recruiter_departments")
+      .update({
+        panel_id,
+      })
+      .eq("recruiter_id", recruiter_id)
+      .eq("department_id", department_id);
+
+    if (error) {
+      console.error("Error adding recruiter to panel:", error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Error in addRecruiterToPanel:", err);
+    return false;
+  }
+};
+
+export const removeRecruiterFromPanel = async (
+  recruiter_id: string,
+  panel_id: string
+) => {
+  const supabase = createClient();
+
+  try {
+    const { error } = await supabase
+      .from("recruiter_departments")
+      .update({
+        panel_id: null,
+      })
+      .eq("recruiter_id", recruiter_id)
+      .eq("panel_id", panel_id);
+
+    if (error) {
+      console.error("Error removing recruiter from panel:", error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Error in removeRecruiterFromPanel:", err);
+    return false;
+  }
+};
+
+export const getMeetLinkByPanelId = async (panel_id: string) => {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruitment_panel")
+      .select("meet_link")
+      .eq("id", panel_id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching meet link by panel ID:", error);
+      return null;
+    }
+
+    return data?.meet_link || null;
+  } catch (err) {
+    console.error("Error in getMeetLinkByPanelId:", err);
+    return null;
   }
 };
