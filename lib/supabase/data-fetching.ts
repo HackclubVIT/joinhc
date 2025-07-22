@@ -1286,3 +1286,25 @@ export const removeRecruiterFromPanel = async (
     return false;
   }
 };
+
+export const getMeetLinkByPanelId = async (panel_id: string) => {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruitment_panel")
+      .select("meet_link")
+      .eq("id", panel_id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching meet link by panel ID:", error);
+      return null;
+    }
+
+    return data?.meet_link || null;
+  } catch (err) {
+    console.error("Error in getMeetLinkByPanelId:", err);
+    return null;
+  }
+};
