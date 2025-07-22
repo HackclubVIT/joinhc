@@ -24,11 +24,13 @@ import {
   Zap,
   Award,
   Target,
+  Video,
 } from "lucide-react";
 import {
   getApplicationForUser,
   getApplicationSettings,
   getDepartments,
+  getMeetLinkByPanelId,
   getOverallApplicationStatus,
   getPreferenceSelectionInfo,
 } from "@/lib/supabase/data-fetching";
@@ -43,6 +45,11 @@ export default function ApplicantDashboard() {
     first: string;
     second: string;
   }>({ first: "", second: "" });
+  const [meetLinks, setMeetLinks] = useState<{
+    first: string | null;
+    second: string | null;
+  }>({ first: null, second: null });
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -75,6 +82,14 @@ export default function ApplicantDashboard() {
             first: firstDeptName,
             second: secondDeptName,
           });
+
+          // get Meetlinks
+          const [first, second] = await Promise.all([
+            getMeetLinkByPanelId(applicationData.first_pref_panel_id),
+            getMeetLinkByPanelId(applicationData.second_pref_panel_id),
+          ]);
+
+          setMeetLinks({ first, second });
         }
 
         if (settingsData?.deadline) {
@@ -542,8 +557,9 @@ export default function ApplicantDashboard() {
                     <div className="space-y-4">
                       <div
                         className={`p-6 rounded-xl border-l-4 ${
-                          application.first_pref_status === "shortlisted" ||
-                          application.first_pref_status === "accepted"
+                          application.second_pref_status === "accepted"
+                            ? "bg-green-500 bg-opacity-50"
+                            : application.first_pref_status === "shortlisted"
                             ? "bg-gradient-to-r from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-500"
                             : application.first_pref_status === "waitlisted"
                             ? "bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-500"
@@ -583,9 +599,26 @@ export default function ApplicantDashboard() {
                           {departmentNames.first}
                         </p>
                         {application.first_pref_status === "shortlisted" &&
+                          meetLinks.first && (
+                            <a
+                              href={meetLinks.first}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex items-center gap-2 border-red-700 border-2"
+                              >
+                                <Video className="h-4 w-4" />
+                                Join Meet
+                              </Button>
+                            </a>
+                          )}
+                        {application.first_pref_status === "shortlisted" &&
                           application.second_pref_status === "shortlisted" && (
                             <p className="text-sm text-green-600 dark:text-green-400 mt-1 font-medium">
-                              🎉 Congratulations! You're selected for this
+                              🎉 Congratulations! You're shortlisted for this
                               department!
                             </p>
                           )}
@@ -593,9 +626,10 @@ export default function ApplicantDashboard() {
 
                       <div
                         className={`p-6 rounded-xl border-l-4 ${
-                          application.second_pref_status === "shortlisted" ||
                           application.second_pref_status === "accepted"
                             ? "bg-green-500 bg-opacity-50"
+                            : application.second_pref_status === "shortlisted"
+                            ? "bg-gradient-to-r from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-500"
                             : application.second_pref_status === "waitlisted"
                             ? "bg-gradient-to-r from-blue-50 to blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-500"
                             : application.second_pref_status === "rejected"
@@ -631,13 +665,32 @@ export default function ApplicantDashboard() {
                             )}
                           </div>
                         </div>
-                        <p className="text-lg font-semibold">
-                          {departmentNames.second}
-                        </p>
+                        <div className="flex justify-between">
+                          <p className="text-lg font-semibold">
+                            {departmentNames.second}
+                          </p>
+                          {application.second_pref_status === "shortlisted" &&
+                            meetLinks.second && (
+                              <a
+                                href={meetLinks.second}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex items-center gap-2 border-red-700 border-2"
+                                >
+                                  <Video className="h-4 w-4" />
+                                  Join Meet
+                                </Button>
+                              </a>
+                            )}
+                        </div>
                         {application.first_pref_status === "shortlisted" &&
                           application.second_pref_status === "shortlisted" && (
                             <p className="text-sm text-green-600 dark:text-green-400 mt-1 font-medium">
-                              🎉 Congratulations! You're selected for this
+                              🎉 Congratulations! You're shortlisted for this
                               department!
                             </p>
                           )}
