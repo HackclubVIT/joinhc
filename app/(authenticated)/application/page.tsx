@@ -30,15 +30,23 @@ import {
   getDepartments,
   getApplicationForUser,
   saveApplication,
-  getApplicationSettings,
+  getApplicationDeadline,
   type Application,
   type Department,
+  getAvailableTimeSlotsForPanel,
+  getApplicantTimeSlot,
+  bookApplicantTimeSlot,
+  cancelApplicantTimeSlot,
+  getPanelByDepartment,
 } from "@/lib/supabase/data-fetching";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { format } from "date-fns";
 
 export default function ApplicationPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [DEPARTMENTS, setDepartments] = useState<Department[]>([]); // <-- store Department[]
+  const [DEPARTMENTS, setDepartments] = useState<Department[]>([]); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -58,22 +66,81 @@ export default function ApplicationPage() {
     links: "",
   });
 
-  const deadlinePassed = deadline ? new Date() > deadline : false;
+  
+  type Pref = 'first' | 'second';
+  type SlotState = { slots: any[]; booking: any; panel: any; meetLink: string | null };
+  const [slotData, setSlotData] = useState<Record<Pref, SlotState>>({
+    first: { slots: [], booking: null, panel: null, meetLink: null },
+    second: { slots: [], booking: null, panel: null, meetLink: null },
+  });
+  const [slotLoading, setSlotLoading] = useState<Record<Pref, boolean>>({ first: false, second: false });
+  const [slotError, setSlotError] = useState<Record<Pref, string | null>>({ first: null, second: null });
+  const [showMeetDialog, setShowMeetDialog] = useState(false);
+  const [meetDialogMsg, setMeetDialogMsg] = useState("");
+
+  
+  const toIST = (date: string | Date) => {
+    return new Date(
+      new Date(date).toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+    );
+  };
+
+  
+  const fetchSlotData = async (pref: Pref) => {
+    setSlotLoading((l) => ({ ...l, [pref]: true }));
+    setSlotError((e) => ({ ...e, [pref]: null }));
+    try {
+      const app = await getApplicationForUser();
+      const panelId =
+        pref === "first"
+          ? app.first_pref_panel_id
+          : app.second_pref_panel_id;
+      const status =
+        pref === "first"
+          ? app.first_pref_status
+          : app.second_pref_status;
+      if (!panelId || status !== "shortlisted") {
+        setSlotData((d) => ({ ...d, [pref]: { slots: [], booking: null, panel: null, meetLink: null } }));
+        setSlotLoading((l) => ({ ...l, [pref]: false }));
+        return;
+      }
+      
+      const slots = await getAvailableTimeSlotsForPanel(panelId);
+      
+      const booking = await getApplicantTimeSlot(app.applicant_id, panelId);
+      
+      const panelArr = await getPanelByDepartment(app[`${pref}_pref_dept_id`]);
+      const panel = panelArr.find((p) => p.id === panelId);
+      setSlotData((d) => ({
+        ...d,
+        [pref]: {
+          slots,
+          booking,
+          panel,
+          meetLink: panel?.meet_link || null,
+        },
+      }));
+    } catch (e) {
+      setSlotError((err) => ({ ...err, [pref]: "Failed to load slots" }));
+    } finally {
+      setSlotLoading((l) => ({ ...l, [pref]: false }));
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch departments
+        
         const departments = await getDepartments();
         setDepartments(departments);
 
-        // Fetch application settings for deadline
-        const settings = await getApplicationSettings();
-        if (settings?.deadline) {
-          setDeadline(new Date(settings.deadline));
+        
+        const applicationDeadline = await getApplicationDeadline();
+        if (applicationDeadline?.deadline) {
+          setDeadline(new Date(applicationDeadline.deadline));
         }
 
-        // Fetch existing application
+        
         const application = await getApplicationForUser();
         setExistingApplication(application);
 
@@ -93,7 +160,7 @@ export default function ApplicationPage() {
             links: application.portfolio_link || "",
           });
         } else {
-          // Set name, email, and register_no from user if no existing application
+          
           setFormData((prev) => ({
             ...prev,
             name: userName,
@@ -109,8 +176,14 @@ export default function ApplicationPage() {
 
     if (user) {
       fetchData();
+      fetchSlotData('first');
+      fetchSlotData('second');
     }
   }, [user]);
+
+  if (!user) {
+    return <div className="content-container py-6 sm:py-10">Loading...</div>;
+  }
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -129,7 +202,7 @@ export default function ApplicationPage() {
     setError(null);
     setSuccess(null);
 
-    // Validation
+    
     if (formData.dept_first_pref === formData.dept_second_pref) {
       setError("First and second preference departments must be different.");
       setIsSubmitting(false);
@@ -147,7 +220,8 @@ export default function ApplicationPage() {
         second_pref_reason: formData.reason_second_pref,
         priority_reason: formData.reason_priority,
         portfolio_link: formData.links,
-        status: "pending",
+        first_pref_status: "pending",
+        second_pref_status: "pending",
       });
 
       setSuccess(
@@ -167,24 +241,40 @@ export default function ApplicationPage() {
     }
   };
 
+  
+  const canShowMeetLink = (slot: any) => {
+    if (!slot) return false;
+    const now = toIST(new Date());
+    const start = toIST(slot.start_time);
+    const end = toIST(slot.end_time);
+    return now >= new Date(start.getTime() - 10 * 60 * 1000) && now <= end;
+  };
+
+  
+  const formatIST = (date: string | Date) =>
+    format(toIST(date), "yyyy-MM-dd HH:mm");
+
+  const deadlinePassed = deadline ? new Date() > deadline : false;
+
   return (
-    <div className="content-container py-6 sm:py-10">
-      <div className="mb-6 sm:mb-8 px-4">
-        <h1 className="text-2xl sm:text-3xl font-bold">Application Form</h1>
-        <p className="text-muted-foreground">
+    <div className="min-h-screen hackclub-bg page-transition overflow-x-hidden">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-10">
+        <div className="mb-4 sm:mb-6 md:mb-8">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Application Form</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           {existingApplication
             ? "Update your application details below."
             : "Please fill out the form below to submit your application."}
         </p>
         {deadline && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Application deadline: {deadline.toLocaleDateString()} at{" "}
-            {deadline.toLocaleTimeString()}
+          <p className="text-xs sm:text-sm text-muted-foreground mt-2">
+            Application deadline:{" "}
+            {deadline.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })} at{" "}
+            {deadline.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata" })}
           </p>
         )}
       </div>
 
-      <div className="px-4">
         {deadlinePassed && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -211,15 +301,15 @@ export default function ApplicationPage() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <Card className="mb-6">
+          <Card className="mb-4 sm:mb-6">
             <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-lg sm:text-xl">Personal Information</CardTitle>
+              <CardDescription className="text-sm sm:text-base">
                 Please provide your personal details
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
                   <Input
@@ -229,7 +319,7 @@ export default function ApplicationPage() {
                     onChange={handleChange}
                     required
                     disabled={true}
-                    className="bg-muted" // Name comes from auth, can't be changed
+                    className="bg-muted" 
                   />
                 </div>
                 <div className="space-y-2">
@@ -241,7 +331,7 @@ export default function ApplicationPage() {
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    disabled={true} // Email comes from auth, can't be changed
+                    disabled={true} 
                     className="bg-muted"
                   />
                 </div>
@@ -255,16 +345,16 @@ export default function ApplicationPage() {
                   onChange={handleChange}
                   required
                   disabled={true}
-                  className="bg-muted" // Register number comes from auth, can't be changed
+                  className="bg-muted" 
                 />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="mb-6">
+          <Card className="mb-4 sm:mb-6">
             <CardHeader>
-              <CardTitle>Department Preferences</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-lg sm:text-xl">Department Preferences</CardTitle>
+              <CardDescription className="text-sm sm:text-base">
                 Select your preferred departments and provide reasons
               </CardDescription>
             </CardHeader>
@@ -414,6 +504,121 @@ export default function ApplicationPage() {
             </CardFooter>
           </Card>
         </form>
+      </div>
+
+      {/* Slot Booking Section */}
+      <div className="px-4 mt-8">
+        {(['first', 'second'] as Pref[]).map((pref) => {
+          const prefLabel = pref === 'first' ? 'First' : 'Second';
+          const d = slotData[pref];
+          if (!d.panel) return null;
+          return (
+            <Card className="mb-6" key={pref}>
+              <CardHeader>
+                <CardTitle>
+                  {prefLabel} Preference Interview Slot
+                </CardTitle>
+                <CardDescription>
+                  Book your interview slot for the {d.panel.name} panel.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {slotLoading[pref] ? (
+                  <div>Loading slots...</div>
+                ) : slotError[pref] ? (
+                  <div className="text-red-500">{slotError[pref]}</div>
+                ) : d.booking ? (
+                  <div className="space-y-2">
+                    <div>
+                      <b>Your booked slot:</b> {formatIST(d.booking.start_time)} to {formatIST(d.booking.end_time)} IST
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          await cancelApplicantTimeSlot(d.booking.applicant_id, d.booking.panel_id);
+                          fetchSlotData(pref);
+                        }}
+                      >
+                        Cancel Booking
+                      </Button>
+                    </div>
+                    {d.meetLink && (
+                      <div className="mt-4">
+                        {canShowMeetLink(d.booking) ? (
+                          <a href={d.meetLink} target="_blank" rel="noopener noreferrer">
+                            <Button>Join Meet</Button>
+                          </a>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setMeetDialogMsg(
+                                `Your interview time is from ${formatIST(d.booking.start_time)} to ${formatIST(d.booking.end_time)} IST. The meet link will be available 10 minutes before your slot.`
+                              );
+                              setShowMeetDialog(true);
+                            }}
+                          >
+                            Join Meet
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-2">Select a slot:</div>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Start</TableHead>
+                            <TableHead>End</TableHead>
+                            <TableHead>Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {d.slots.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={3}>No available slots.</TableCell>
+                            </TableRow>
+                          ) : (
+                            d.slots.map((slot: any) => (
+                              <TableRow key={slot.id}>
+                                <TableCell>{formatIST(slot.start_time)}</TableCell>
+                                <TableCell>{formatIST(slot.end_time)}</TableCell>
+                                <TableCell>
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      if (!user) return;
+                                      await bookApplicantTimeSlot(user.id, d.panel.id, slot.id);
+                                      fetchSlotData(pref);
+                                    }}
+                                  >
+                                    Book
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+        <Dialog open={showMeetDialog} onOpenChange={setShowMeetDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Meet Link Unavailable</DialogTitle>
+            </DialogHeader>
+            <div>{meetDialogMsg}</div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

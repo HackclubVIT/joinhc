@@ -3,9 +3,9 @@ import type { NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next()
+  const response = NextResponse.next();
+  const url = request.nextUrl.clone();
 
-  // Create a Supabase client
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -32,13 +32,32 @@ export async function middleware(request: NextRequest) {
     if (
       request.nextUrl.pathname.startsWith("/dashboard") ||
       request.nextUrl.pathname.startsWith("/application") ||
-      request.nextUrl.pathname.startsWith("/profile")
+      request.nextUrl.pathname.startsWith("/profile") ||
+      request.nextUrl.pathname.startsWith("/admin")
     ) {
       if (!user) {
         const redirectUrl = new URL("/login", request.url)
         redirectUrl.searchParams.set("redirect", request.nextUrl.pathname)
         return NextResponse.redirect(redirectUrl)
       }
+      
+      if (request.nextUrl.pathname.startsWith("/admin")) {
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          
+          if (profileData?.role !== "admin") {
+            return NextResponse.redirect(new URL("/dashboard", request.url))
+          }
+        } catch (error) {
+          console.error("Error checking admin role:", error)
+          return NextResponse.redirect(new URL("/dashboard", request.url))
+        }
+      }
+      
       if(request.nextUrl.pathname.startsWith("/application")) {
         try{
           const { data: profileData } = await supabase
@@ -55,7 +74,6 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL("/dashboard", request.url))
         }
       }
-      // Check for recruiter-only routes
       if (request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
         try {
           const { data: profileData } = await supabase
@@ -74,7 +92,6 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    // For login/register routes - redirect to dashboard if already logged in
     if (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register") {
       if (user) {
         try {
@@ -104,6 +121,8 @@ export async function middleware(request: NextRequest) {
         
         if (profileData?.role === "recruiter") {
           return NextResponse.redirect(new URL("/dashboard/recruiter", request.url))
+        } else if (profileData?.role === "admin") {
+          return NextResponse.redirect(new URL("/admin", request.url))
         }
       } catch (error) {
         console.error("Error checking role for applicant dashboard:", error)
@@ -113,9 +132,9 @@ export async function middleware(request: NextRequest) {
     console.error("Middleware error:", error)
   }
 
-  return response
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/application/:path*", "/profile/:path*", "/login", "/register", "/auth/callback"],
+  matcher: ["/dashboard/:path*", "/application/:path*", "/profile/:path*", "/login", "/register", "/auth/callback","/admin/:path*"],
 }

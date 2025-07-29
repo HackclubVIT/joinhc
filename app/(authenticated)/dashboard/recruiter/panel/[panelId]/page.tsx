@@ -18,6 +18,11 @@ import {
   getPanelData,
   updateMeetLink,
   updateOrCreateApplicantMark,
+  getPanelTimeSlots,
+  createPanelTimeSlot,
+  updatePanelTimeSlot,
+  deletePanelTimeSlot,
+  type PanelTimeSlot,
 } from "@/lib/supabase/data-fetching";
 import {
   ArrowLeft,
@@ -36,6 +41,8 @@ import Link from "next/link";
 import { redirect, useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { format } from "date-fns";
 
 type PanelData = {
   name: string;
@@ -73,6 +80,26 @@ export default function PanelPage() {
   const [remark, setRemark] = useState<string>("");
   const [meetLink, setMeetLink] = useState<string>("");
   const [meetLinkEditable, setMeetLinkEditable] = useState(false);
+  const [isTimeSlotDialogOpen, setIsTimeSlotDialogOpen] = useState(false);
+  const [timeSlots, setTimeSlots] = useState<PanelTimeSlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotForm, setSlotForm] = useState({ start: "", end: "" });
+  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ start: "", end: "" });
+  const [slotError, setSlotError] = useState<string | null>(null);
+
+  // Fetch time slots for this panel
+  const fetchTimeSlots = async () => {
+    setLoadingSlots(true);
+    try {
+      const slots = await getPanelTimeSlots(panelId);
+      setTimeSlots(slots);
+    } catch (e) {
+      setSlotError("Failed to load time slots");
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
 
   useEffect(() => {
     if (isMarkDialogOpen && selectedApplicant?.id && panelData?.department_id) {
@@ -91,7 +118,7 @@ export default function PanelPage() {
   useEffect(() => {
     const fetchData = async () => {
       const valid = await checkIsEvaluatorOrRecruiter(panelId);
-      if (!valid) redirect("/recruiter");
+      if (!valid) redirect("/dashboard/recruiter");
       const data = await getPanelData(panelId);
       setPanelData(data);
       setMeetLink(data?.meet_link || "");
@@ -99,6 +126,10 @@ export default function PanelPage() {
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (isTimeSlotDialogOpen) fetchTimeSlots();
+  }, [isTimeSlotDialogOpen]);
 
   if (!panelData) {
     return (
@@ -122,12 +153,12 @@ export default function PanelPage() {
   );
 
   return (
-    <div className="min-h-screen hackclub-bg page-transition">
-      <div className="content-container py-8">
-        <div className="px-4">
+    <div className="min-h-screen hackclub-bg page-transition overflow-x-hidden">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12">
+        <div>
           {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-4 mb-4">
+          <div className="mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4">
               <Button
                 variant="ghost"
                 size="sm"
@@ -151,23 +182,30 @@ export default function PanelPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex justify-center">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+              <div className="flex justify-center sm:justify-start">
                 <HackClubLogo size="md" showText={false} />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-foreground">
+              <div className="text-center sm:text-left">
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                   {panelData.name}
                 </h1>
-                <p className="text-muted-foreground">
+                <p className="text-sm sm:text-base text-muted-foreground">
                   Manage evaluation for this panel
                 </p>
+                <Button
+                  variant="outline"
+                  className="mt-4 w-full sm:w-auto"
+                  onClick={() => setIsTimeSlotDialogOpen(true)}
+                >
+                  Manage Interview Time Slots
+                </Button>
               </div>
             </div>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6 sm:mb-8">
             <div className="stats-card">
               <div className="flex items-center justify-between">
                 <div>
@@ -216,26 +254,26 @@ export default function PanelPage() {
               </div>
             </div>
           </div>
-          <Card className="neo-card">
+          <Card className="">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex justify-between w-full">
-                  <CardTitle className="text-2xl font-semibold">
+                <div className="flex flex-col sm:flex-row sm:justify-between w-full gap-4">
+                  <CardTitle className="text-xl sm:text-2xl font-semibold">
                     Applicants
                   </CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <Input
                       placeholder="Enter Meet link"
-                      className="bg-input border-border border-2"
+                      className="bg-input border-border border-2 w-full sm:w-auto"
                       disabled={!meetLinkEditable}
                       value={meetLink}
                       onChange={(e) => setMeetLink(e.target.value)}
                     />
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 w-full sm:w-auto">
                       {meetLink && !meetLinkEditable && (
                         <a
                           target="_blank"
-                          className="cursor-pointer text-sm bg-red-500 rounded-sm w-24 flex justify-center items-center"
+                          className="cursor-pointer text-xs sm:text-sm bg-red-500 rounded-sm w-full sm:w-24 flex justify-center items-center px-2 py-1"
                           href={meetLink}
                         >
                           <p>Join Meet</p>
@@ -243,6 +281,7 @@ export default function PanelPage() {
                       )}
                       <Button
                         size="sm"
+                        className="w-full sm:w-auto text-xs sm:text-sm"
                         onClick={async () => {
                           if (!meetLinkEditable) {
                             setMeetLinkEditable(true);
@@ -294,37 +333,37 @@ export default function PanelPage() {
                   filteredApplicants.map((applicant) => (
                     <Card
                       key={applicant.id}
-                      className="neo-card transition-all duration-300 hover:scale-[1.02]"
+                      className="transition-all duration-300 hover:scale-[1.02]"
                     >
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start">
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
                           <div className="flex-1 space-y-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 flex items-center justify-center">
-                                  <User className="h-6 w-6 text-primary" />
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex items-center gap-3 sm:gap-4">
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                                  <User className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                                 </div>
-                                <div>
+                                <div className="min-w-0 flex-1">
                                   <button
                                     onClick={() => {
                                       setSelectedApplicant(applicant);
                                       setIsDialogOpen(true);
                                     }}
-                                    className="text-lg font-semibold text-foreground hover:text-primary transition-colors text-left"
+                                    className="text-base sm:text-lg font-semibold text-foreground hover:text-primary transition-colors text-left truncate"
                                   >
                                     {applicant.name || "N/A"}
                                   </button>
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Mail className="h-3 w-3" />
-                                    {applicant.email}
+                                  <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground truncate">
+                                    <Mail className="h-3 w-3 flex-shrink-0" />
+                                    <span className="truncate">{applicant.email}</span>
                                   </div>
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Hash className="h-3 w-3" />
-                                    {applicant.register_no}
+                                  <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground truncate">
+                                    <Hash className="h-3 w-3 flex-shrink-0" />
+                                    <span className="truncate">{applicant.register_no}</span>
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex flex-col gap-2">
+                              <div className="flex flex-col sm:flex-row gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -332,10 +371,11 @@ export default function PanelPage() {
                                     setSelectedApplicant(applicant);
                                     setIsDialogOpen(true);
                                   }}
-                                  className="border-2"
+                                  className="border-2 text-xs sm:text-sm"
                                 >
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  View Application
+                                  <Eye className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                                  <span className="hidden sm:inline">View Application</span>
+                                  <span className="sm:hidden">View</span>
                                 </Button>
                                 <Button
                                   size="sm"
@@ -344,10 +384,11 @@ export default function PanelPage() {
                                     setSelectedApplicant(applicant);
                                     setIsMarkDialogOpen(true);
                                   }}
-                                  className="border-2"
+                                  className="border-2 text-xs sm:text-sm"
                                 >
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  Mark Application
+                                  <Edit className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                                  <span className="hidden sm:inline">Mark Application</span>
+                                  <span className="sm:hidden">Mark</span>
                                 </Button>
                               </div>
                             </div>
@@ -362,10 +403,10 @@ export default function PanelPage() {
           </Card>
 
           <Dialog open={isMarkDialogOpen} onOpenChange={setIsMarkDialogOpen}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="w-[95vw] max-w-md">
               <DialogHeader>
-                <DialogTitle>Mark & Remark</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="text-lg sm:text-xl">Mark & Remark</DialogTitle>
+                <DialogDescription className="text-sm sm:text-base">
                   Enter the mark and remark for {selectedApplicant?.name}
                 </DialogDescription>
               </DialogHeader>
@@ -437,75 +478,75 @@ export default function PanelPage() {
 
           {/* Applicant Details Dialog */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-y-auto border-0">
               <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">
+                <DialogTitle className="text-lg sm:text-xl font-semibold">
                   Applicant Details
                 </DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="text-sm sm:text-base">
                   Detailed information about {selectedApplicant?.name}
                 </DialogDescription>
               </DialogHeader>
 
               {selectedApplicant && (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-sm font-medium">Name</Label>
-                      <p className="text-sm">{selectedApplicant.name}</p>
+                      <Label className="text-xs sm:text-sm font-medium">Name</Label>
+                      <p className="text-xs sm:text-sm">{selectedApplicant.name}</p>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium">Email</Label>
-                      <p className="text-sm">{selectedApplicant.email}</p>
+                      <Label className="text-xs sm:text-sm font-medium">Email</Label>
+                      <p className="text-xs sm:text-sm">{selectedApplicant.email}</p>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium">
+                      <Label className="text-xs sm:text-sm font-medium">
                         Register Number
                       </Label>
-                      <p className="text-sm">{selectedApplicant.register_no}</p>
+                      <p className="text-xs sm:text-sm">{selectedApplicant.register_no}</p>
                     </div>
                   </div>
 
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-sm font-medium">
+                      <Label className="text-xs sm:text-sm font-medium">
                         First Preference
                       </Label>
-                      <p className="text-sm font-medium">
+                      <p className="text-xs sm:text-sm font-medium">
                         {selectedApplicant.first_pref_dept}
                       </p>
-                      <p className="text-sm text-muted-foreground mt-1">
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         {selectedApplicant.first_pref_reason}
                       </p>
                     </div>
 
                     <div>
-                      <Label className="text-sm font-medium">
+                      <Label className="text-xs sm:text-sm font-medium">
                         Second Preference
                       </Label>
-                      <p className="text-sm font-medium">
+                      <p className="text-xs sm:text-sm font-medium">
                         {selectedApplicant.second_pref_dept}
                       </p>
-                      <p className="text-sm text-muted-foreground mt-1">
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         {selectedApplicant.second_pref_reason}
                       </p>
                     </div>
 
                     <div>
-                      <Label className="text-sm font-medium">
+                      <Label className="text-xs sm:text-sm font-medium">
                         Priority Reasoning
                       </Label>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         {selectedApplicant.priority_reason}
                       </p>
                     </div>
 
                     {selectedApplicant.portfolio_link && (
                       <div>
-                        <Label className="text-sm font-medium">
+                        <Label className="text-xs sm:text-sm font-medium">
                           Portfolio/Links
                         </Label>
-                        <div className="text-sm text-muted-foreground whitespace-pre-line">
+                        <div className="text-xs sm:text-sm text-muted-foreground whitespace-pre-line">
                           {selectedApplicant.portfolio_link
                             .split("\n")
                             .map((link, index) => (
@@ -520,7 +561,7 @@ export default function PanelPage() {
                                       href={link}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-primary hover:underline"
+                                      className="text-primary hover:underline break-all"
                                     >
                                       {link}
                                     </a>
@@ -535,10 +576,10 @@ export default function PanelPage() {
                     )}
 
                     <div>
-                      <Label className="text-sm font-medium">
+                      <Label className="text-xs sm:text-sm font-medium">
                         Submitted At
                       </Label>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
                         <Calendar className="h-3 w-3" />
                         {new Date(
                           selectedApplicant.created_at
@@ -548,6 +589,146 @@ export default function PanelPage() {
                   </div>
                 </div>
               )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Time Slot Management Dialog */}
+          <Dialog open={isTimeSlotDialogOpen} onOpenChange={setIsTimeSlotDialogOpen}>
+            <DialogContent className="w-[95vw] max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-lg sm:text-xl">Manage Interview Time Slots</DialogTitle>
+                <DialogDescription className="text-sm sm:text-base">
+                  Create, edit, or delete interview time slots for this panel. Each slot can be booked by one applicant only.
+                </DialogDescription>
+              </DialogHeader>
+              {/* Create new slot */}
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                <Input
+                  type="datetime-local"
+                  value={slotForm.start}
+                  onChange={e => setSlotForm(f => ({ ...f, start: e.target.value }))}
+                  placeholder="Start time"
+                  className="text-sm sm:text-base"
+                />
+                <Input
+                  type="datetime-local"
+                  value={slotForm.end}
+                  onChange={e => setSlotForm(f => ({ ...f, end: e.target.value }))}
+                  placeholder="End time"
+                  className="text-sm sm:text-base"
+                />
+                <Button
+                  onClick={async () => {
+                    setSlotError(null);
+                    if (!slotForm.start || !slotForm.end) {
+                      setSlotError("Start and end time required");
+                      return;
+                    }
+                    try {
+                      await createPanelTimeSlot(panelId, slotForm.start, slotForm.end);
+                      setSlotForm({ start: "", end: "" });
+                      fetchTimeSlots();
+                    } catch (e) {
+                      setSlotError("Failed to create slot");
+                    }
+                  }}
+                  className="text-sm sm:text-base"
+                >
+                  Add Slot
+                </Button>
+              </div>
+              {slotError && <div className="text-red-500 text-xs sm:text-sm mb-2">{slotError}</div>}
+              {/* List slots */}
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs sm:text-sm">Start</TableHead>
+                      <TableHead className="text-xs sm:text-sm">End</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Status</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingSlots ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-xs sm:text-sm">Loading...</TableCell>
+                      </TableRow>
+                    ) : timeSlots.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-xs sm:text-sm">No time slots yet.</TableCell>
+                      </TableRow>
+                    ) : (
+                      timeSlots.map(slot => (
+                        <TableRow key={slot.id}>
+                          <TableCell className="text-xs sm:text-sm">{format(new Date(slot.start_time), "yyyy-MM-dd HH:mm")}</TableCell>
+                          <TableCell className="text-xs sm:text-sm">{format(new Date(slot.end_time), "yyyy-MM-dd HH:mm")}</TableCell>
+                          <TableCell className="text-xs sm:text-sm">{/* TODO: Show booked/available status */}Available</TableCell>
+                          <TableCell className="text-xs sm:text-sm">
+                            {editingSlotId === slot.id ? (
+                              <>
+                                <Input
+                                  type="datetime-local"
+                                  value={editForm.start}
+                                  onChange={e => setEditForm(f => ({ ...f, start: e.target.value }))}
+                                  className="mb-1 text-xs sm:text-sm"
+                                />
+                                <Input
+                                  type="datetime-local"
+                                  value={editForm.end}
+                                  onChange={e => setEditForm(f => ({ ...f, end: e.target.value }))}
+                                  className="mb-1 text-xs sm:text-sm"
+                                />
+                                <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                    className="text-xs sm:text-sm"
+                                  onClick={async () => {
+                                    try {
+                                      await updatePanelTimeSlot(slot.id, editForm.start, editForm.end);
+                                      setEditingSlotId(null);
+                                      fetchTimeSlots();
+                                    } catch (e) {
+                                      setSlotError("Failed to update slot");
+                                    }
+                                  }}
+                                >
+                                  Save
+                                </Button>
+                                  <Button size="sm" variant="ghost" className="text-xs sm:text-sm" onClick={() => setEditingSlotId(null)}>
+                                  Cancel
+                                </Button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex flex-col sm:flex-row gap-1">
+                                  <Button size="sm" variant="outline" className="text-xs sm:text-sm" onClick={() => {
+                                  setEditingSlotId(slot.id);
+                                  setEditForm({ start: slot.start_time.slice(0, 16), end: slot.end_time.slice(0, 16) });
+                                }}>
+                                  Edit
+                                </Button>
+                                  <Button size="sm" variant="destructive" className="text-xs sm:text-sm" onClick={async () => {
+                                  try {
+                                    await deletePanelTimeSlot(slot.id);
+                                    fetchTimeSlots();
+                                  } catch (e) {
+                                    setSlotError("Failed to delete slot");
+                                  }
+                                }}>
+                                  Delete
+                                </Button>
+                                </div>
+                              </>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </DialogContent>
           </Dialog>
         </div>

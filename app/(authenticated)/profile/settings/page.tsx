@@ -289,11 +289,7 @@ export default function SettingsPage() {
                 </Label>
                 <p className="font-semibold">
                   {user?.created_at
-                    ? new Date(user.created_at).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })
+                    ? new Date(user.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
                     : "N/A"}
                 </p>
               </div>

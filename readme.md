@@ -65,19 +65,25 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 2. Get your project URL and anon key from the project settings
 3. Run the database setup scripts in the following order:
 
-\`\`\`sql
+```sql
 -- Execute these scripts in your Supabase SQL editor
 -- 1. Run the complete setup script
--- (Copy and paste the content from scripts/finalschema.sql)
-\`\`\`
+-- (Copy and paste the content from scripts/schema.sql)
+
+-- 2. Run the email domain validation script
+-- (Copy and paste the content from scripts/email_domain_validation.sql)
+```
+
+**Important**: The email domain validation script ensures only `@vitstudent.ac.in` emails can register new accounts. Admin accounts with `@gmail.com` emails created before this restriction will continue to work.
 
 ### 5. Run the Development Server
 
-\`\`\`bash
+\`\`\`
+```bash
 npm run dev
 # or
 yarn dev
-\`\`\`
+```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
@@ -104,13 +110,14 @@ The system uses Supabase Auth with role-based access control:
 
 - **Applicants**: Can submit and manage their own applications
 - **Recruiters**: Can view and manage applications for assigned departments
+- **Admins**: Can manage users, departments, and system settings
 - **Row Level Security**: Ensures users can only access authorized data
 
 ## 📱 Usage Guide
 
 ### For Applicants
 
-1. **Register**: Create an account with email and password
+1. **Register**: Create an account with your `@vitstudent.ac.in` email
 2. **Complete Profile**: Add personal information and register number
 3. **Submit Application**: 
    - Select first and second preference departments
@@ -129,13 +136,20 @@ The system uses Supabase Auth with role-based access control:
 4. **Make Decisions**: Shortlist, waitlist, or reject applications
 5. **Export Data**: Download application data as CSV
 
+### For Admins
+
+1. **User Management**: Manage all users and their roles
+2. **Department Management**: Create and manage departments
+3. **System Settings**: Configure application deadlines and system settings
+4. **Recruiter Assignment**: Assign recruiters to departments
 
 ## 🔧 Configuration
 
 ### Application Settings
 
-Recruiters can configure:
+Admins can configure:
 - Application deadlines
+- Shortlist deadlines
 - Department information
 - User roles and permissions
 
@@ -156,27 +170,27 @@ Key environment variables:
 
 ### Manual Deployment
 
-\`\`\`bash
+```bash
 npm run build
 npm start
-\`\`\`
+```
 
 ## 🧪 Development
 
 ### Running Tests
 
-\`\`\`bash
+```bash
 npm run test
 # or
 yarn test
-\`\`\`
+```
 
 ### Code Formatting
 
-\`\`\`bash
+```bash
 npm run lint
 npm run format
-\`\`\`
+```
 
 ### Database Migrations
 

@@ -58,7 +58,9 @@ function AuthCallbackContent() {
             }
 
             const role = profileData?.role || "applicant";
-            const redirectPath = "/profile/settings";
+            const redirectPath =
+              role === "recruiter" ? "/dashboard/recruiter" : 
+              role === "admin" ? "/admin" : "/dashboard";
             router.push(redirectPath);
           } else {
             setError("No session created after verification");
@@ -90,7 +92,8 @@ function AuthCallbackContent() {
 
             const role = profileData?.role || "applicant";
             const redirectPath =
-              role === "recruiter" ? "/dashboard/recruiter" : "/dashboard";
+              role === "recruiter" ? "/dashboard/recruiter" : 
+              role === "admin" ? "/admin" : "/dashboard";
             router.push(redirectPath);
           } else {
             setError("No session created");
@@ -121,7 +124,8 @@ function AuthCallbackContent() {
 
             const role = profileData?.role || "applicant";
             const redirectPath =
-              role === "recruiter" ? "/dashboard/recruiter" : "/dashboard";
+              role === "recruiter" ? "/dashboard/recruiter" : 
+              role === "admin" ? "/admin" : "/dashboard";
             router.push(redirectPath);
           } else {
             router.push("/login");

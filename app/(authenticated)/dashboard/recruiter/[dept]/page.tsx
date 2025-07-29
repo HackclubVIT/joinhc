@@ -46,6 +46,14 @@ import {
   NotebookText,
   Plus,
   Trash2,
+  Users,
+  UserPlus,
+  UserCheck,
+  ListTodo,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  UserMinus,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -55,12 +63,21 @@ import {
   getOverallApplicationStatus,
   type Application,
   getApplicantMarks,
+  getApplicantAverageMarks,
   getPanelByDepartment,
   createPanel,
   getPanelMembers,
   getRecruiterByDepartment,
   addRecruiterToPanel,
   removeRecruiterFromPanel,
+  getShortlistedApplicantsByDepartment,
+  getUnassignedShortlistedApplicantsByDepartment,
+  getShortlistedApplicantsWithAssignmentStatus,
+  assignApplicantToPanel,
+  removeApplicantFromPanel,
+  getApplicationDeadline,
+  getShortlistDeadline,
+  isCurrentUserRecruiterForDepartment,
 } from "@/lib/supabase/data-fetching";
 import { HackClubLogo } from "@/components/hackclub-logo";
 import {
@@ -72,6 +89,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function DepartmentPage() {
   const params = useParams();
@@ -102,12 +121,15 @@ export default function DepartmentPage() {
   const [panelMembers, setPanelMembers] = useState<
     { id: string; name: string; email: string }[]
   >([]);
+  const [shortlistedApplicants, setShortlistedApplicants] = useState<any[]>([]);
+  const { toast } = useToast();
 
   const [departmentRecruiters, setDepartmentRecruiters] = useState<
     { id: string; name: string; email: string }[]
   >([]);
 
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isRecruiterForDepartment, setIsRecruiterForDepartment] = useState(false);
 
   const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("");
   const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("");
@@ -117,6 +139,23 @@ export default function DepartmentPage() {
   const [evaluations, setEvaluations] = useState<
     { score: number; remarks: string; recruiter: { full_name: string } }[]
   >([]);
+  const [averageMarks, setAverageMarks] = useState<{
+    average: number;
+    totalMarks: number;
+    totalEvaluators: number;
+  } | null>(null);
+  const [applicantAverages, setApplicantAverages] = useState<{
+    [applicantId: string]: {
+      average: number;
+      totalEvaluators: number;
+    } | null;
+  }>({});
+
+  const [isPanelDialogOpen, setIsPanelDialogOpen] = useState(false);
+  const [panelDialogTab, setPanelDialogTab] = useState('recruiters');
+
+  const [applicationDeadline, setApplicationDeadline] = useState<Date | null>(null);
+  const [shortlistDeadline, setShortlistDeadline] = useState<Date | null>(null);
 
   const fetchPanelMembers = async () => {
     if (selectedPanel) {
@@ -143,12 +182,17 @@ export default function DepartmentPage() {
   useEffect(() => {
     const fetchData = async () => {
       if (selectedApplicant) {
-        setEvaluations(await getApplicantMarks(selectedApplicant.id, deptId));
+        const [marks, average] = await Promise.all([
+          getApplicantMarks(selectedApplicant.id, deptId),
+          getApplicantAverageMarks(selectedApplicant.id, deptId)
+        ]);
+        setEvaluations(marks);
+        setAverageMarks(average);
       }
     };
 
     fetchData();
-  }, [isMarksDialogOpen]);
+  }, [isMarksDialogOpen, selectedApplicant, deptId]);
 
   useEffect(() => {
     if (panels.length > 0) return;
@@ -178,6 +222,28 @@ export default function DepartmentPage() {
       try {
         const data = await getDepartmentApplicants(deptId);
         setApplicants(data);
+        
+        // Fetch average marks for all applicants
+        const averages: { [applicantId: string]: { average: number; totalEvaluators: number } | null } = {};
+        
+        for (const applicant of data) {
+          try {
+            const avgData = await getApplicantAverageMarks(applicant.id, deptId);
+            if (avgData) {
+              averages[applicant.id] = {
+                average: avgData.average,
+                totalEvaluators: avgData.totalEvaluators
+              };
+            } else {
+              averages[applicant.id] = null;
+            }
+          } catch (err) {
+            console.error(`Error fetching average for applicant ${applicant.id}:`, err);
+            averages[applicant.id] = null;
+          }
+        }
+        
+        setApplicantAverages(averages);
       } catch (err) {
         console.error("Error fetching applicants:", err);
       } finally {
@@ -214,6 +280,42 @@ export default function DepartmentPage() {
 
     setFilteredApplicants(filtered);
   }, [applicants, searchQuery, statusFilter, preferenceFilter, deptId]);
+
+  useEffect(() => {
+    async function fetchDeadlines() {
+      try {
+        const [appDL, shortDL] = await Promise.all([
+          getApplicationDeadline(),
+          getShortlistDeadline(),
+        ]);
+        setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
+        setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
+      } catch (err) {
+        setApplicationDeadline(null);
+        setShortlistDeadline(null);
+      }
+    }
+    fetchDeadlines();
+  }, []);
+
+  // Check if current user is a recruiter (not evaluator) for this department
+  useEffect(() => {
+    const checkUserRole = async () => {
+      try {
+        const isRecruiter = await isCurrentUserRecruiterForDepartment(deptId);
+        setIsRecruiterForDepartment(isRecruiter);
+      } catch (error) {
+        console.error('Error checking user role:', error);
+        setIsRecruiterForDepartment(false);
+      }
+    };
+    
+    checkUserRole();
+  }, [deptId]);
+
+  const now = new Date();
+  const canShortlist = applicationDeadline && shortlistDeadline && now > applicationDeadline && now < shortlistDeadline;
+  const canPanel = shortlistDeadline && now > shortlistDeadline;
 
   const handleStatusUpdate = async (
     applicationId: string,
@@ -290,6 +392,14 @@ export default function DepartmentPage() {
     return applicant.first_pref_dept_id === deptId ? "first" : "second";
   };
 
+  // Get color-coded badge for average score
+  const getAverageScoreBadge = (average: number) => {
+    if (average >= 8) return "bg-green-100 text-green-800 border-green-200";
+    if (average >= 6) return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    if (average >= 4) return "bg-orange-100 text-orange-800 border-orange-200";
+    return "bg-red-100 text-red-800 border-red-200";
+  };
+
   const departmentStats = {
     totalApplicants: applicants.length,
     firstPrefCount: applicants.filter(
@@ -329,11 +439,18 @@ export default function DepartmentPage() {
     fetchDeptNames();
   }, [selectedApplicant]);
 
+  // Fetch shortlisted applicants for the applicants tab
+  useEffect(() => {
+    if (isPanelDialogOpen && panelDialogTab === 'applicants' && selectedPanel) {
+      getShortlistedApplicantsWithAssignmentStatus(deptId, selectedPanel.id).then(setShortlistedApplicants);
+    }
+  }, [isPanelDialogOpen, panelDialogTab, selectedPanel, deptId]);
+
   if (isLoading) {
     return (
-      <div className="min-h-screen hackclub-bg">
-        <div className="content-container py-8">
-          <div className="space-y-6 px-4">
+      <div className="min-h-screen hackclub-bg overflow-x-hidden">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12">
+          <div className="space-y-6">
             <div className="loading-shimmer h-8 w-64 rounded"></div>
             <div className="grid gap-4">
               {[1, 2, 3].map((i) => (
@@ -346,13 +463,31 @@ export default function DepartmentPage() {
     );
   }
 
+  const openPanelDialog = (panel: { id: string; name: string }) => {
+    setSelectedPanel(panel);
+    setPanelDialogTab('recruiters');
+    setIsPanelDialogOpen(true);
+  };
+
+  // Manual assign applicant to panel
+  const handleAssignApplicantToPanel = async (applicantId: string, preference: 'first' | 'second') => {
+    if (!selectedPanel) return;
+    try {
+      await assignApplicantToPanel(applicantId, selectedPanel.id, preference);
+      toast({ title: 'Assigned', description: 'Applicant assigned to panel' });
+      setShortlistedApplicants(await getShortlistedApplicantsWithAssignmentStatus(deptId, selectedPanel.id));
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to assign', variant: 'destructive' });
+    }
+  };
+
   return (
-    <div className="min-h-screen hackclub-bg page-transition">
-      <div className="content-container py-8">
-        <div className="px-4">
+    <div className="min-h-screen hackclub-bg page-transition overflow-x-hidden">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12">
+        <div>
           {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-4 mb-4">
+          <div className="mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4">
               <Button
                 variant="ghost"
                 size="sm"
@@ -376,23 +511,32 @@ export default function DepartmentPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex justify-center">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+              <div className="flex justify-center sm:justify-start">
                 <HackClubLogo size="md" showText={false} />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-foreground">
+              <div className="flex-1 text-center sm:text-left">
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                   {departmentName} Department
                 </h1>
-                <p className="text-muted-foreground">
+                <p className="text-sm sm:text-base text-muted-foreground">
                   Manage applications for this department
                 </p>
+              </div>
+              {/* Role indicator */}
+              <div className="flex items-center justify-center sm:justify-end gap-2">
+                <Badge 
+                  variant={isRecruiterForDepartment ? "default" : "secondary"}
+                  className={isRecruiterForDepartment ? "bg-green-500 hover:bg-green-600" : "bg-orange-500 hover:bg-orange-600 text-white"}
+                >
+                  {isRecruiterForDepartment ? "Recruiter" : "Evaluator"}
+                </Badge>
               </div>
             </div>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6 sm:mb-8">
             <div className="stats-card">
               <div className="flex items-center justify-between">
                 <div>
@@ -456,90 +600,90 @@ export default function DepartmentPage() {
             </div>
           </div>
 
-          <Card className="neo-card mb-8">
-            <CardHeader className="flex flex-row justify-between">
-              <div>
-                <CardTitle>Panels for {departmentName}</CardTitle>
-                <CardDescription className="text-base">
-                  Manage panels and for this department
-                </CardDescription>
-              </div>
-              <div>
-                <Button
-                  variant="outline"
-                  className="w-fit border-2"
-                  onClick={async () => {
-                    setIsNewPanelDialogOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                  New Panel
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {panels.length === 0 ? (
-                  <div className="text-center py-12">
-                    <NotebookText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-foreground mb-2">
-                      No panels found
-                    </h3>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {panels.map((panel) => (
-                      <Card key={panel.id} className="neo-card">
-                        <CardContent className="p-2">
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 flex items-center justify-center">
-                                <NotebookText className="h-6 w-6 text-primary" />
+          {canPanel && (
+            <Card className="mb-6 sm:mb-8">
+              <CardHeader className="flex flex-col sm:flex-row sm:justify-between gap-4">
+                <div>
+                  <CardTitle className="text-xl sm:text-2xl">Panels for {departmentName}</CardTitle>
+                  <CardDescription className="text-sm sm:text-base">
+                    Manage panels and for this department
+                  </CardDescription>
+                </div>
+                <div>
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-fit border-2"
+                    onClick={async () => {
+                      setIsNewPanelDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    New Panel
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {panels.length === 0 ? (
+                    <div className="text-center py-12">
+                      <NotebookText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-foreground mb-2">
+                        No panels found
+                      </h3>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                      {panels.map((panel) => (
+                        <Link href={`/dashboard/recruiter/panel/${panel.id}`} key={panel.id}>
+                          <Card>
+                            <CardContent className="p-3 sm:p-4">
+                              <div className="flex justify-between items-start gap-3">
+                                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                                    <NotebookText className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-base sm:text-lg font-semibold truncate">{panel.name}</p>
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <Button
+                                    variant="outline"
+                                    className="h-10 w-10 sm:h-12 sm:w-12"
+                                    onClick={e => {
+                                      e.preventDefault();
+                                      openPanelDialog(panel);
+                                    }}
+                                  >
+                                    <NotebookPen className="h-4 w-4 sm:h-5 sm:w-5" />
+                                  </Button>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-lg">{panel.name}</p>
-                              </div>
-                            </div>
-                            <div>
-                              <Button
-                                variant="outline"
-                                className="h-12 w-12"
-                                onClick={() => {
-                                  setSelectedPanel(panel);
-                                  setIsPanelMembersDialogOpen(true);
-                                }}
-                              >
-                                <NotebookPen className="h-5 w-5" />
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                            </CardContent>
+                          </Card>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card className="neo-card">
+          {/* Main Applications Table UI */}
+          <Card>
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl font-semibold">
+                  <CardTitle className="text-xl sm:text-2xl font-semibold">
                     Applicants for {departmentName}
                   </CardTitle>
-                  <CardDescription className="text-base">
+                  <CardDescription className="text-sm sm:text-base">
                     Review and manage department applications
                   </CardDescription>
                 </div>
-                <Button variant="outline" className="w-fit border-2">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export CSV
-                </Button>
               </div>
             </CardHeader>
-
             <CardContent>
               {/* Filters */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
@@ -552,12 +696,12 @@ export default function DepartmentPage() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Select
                     value={preferenceFilter}
                     onValueChange={setPreferenceFilter}
                   >
-                    <SelectTrigger className="w-[140px] bg-input border-border">
+                    <SelectTrigger className="w-full sm:w-[140px] bg-input border-border">
                       <SelectValue placeholder="Preference" />
                     </SelectTrigger>
                     <SelectContent className="bg-card border-border">
@@ -567,7 +711,7 @@ export default function DepartmentPage() {
                     </SelectContent>
                   </Select>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[140px] bg-input border-border">
+                    <SelectTrigger className="w-full sm:w-[140px] bg-input border-border">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent className="bg-card border-border">
@@ -580,7 +724,6 @@ export default function DepartmentPage() {
                   </Select>
                 </div>
               </div>
-
               {/* Applications Grid */}
               <div className="space-y-4">
                 {filteredApplicants.length === 0 ? (
@@ -591,8 +734,8 @@ export default function DepartmentPage() {
                     </h3>
                     <p className="text-muted-foreground">
                       {searchQuery ||
-                      statusFilter !== "all" ||
-                      preferenceFilter !== "all"
+                        statusFilter !== "all" ||
+                        preferenceFilter !== "all"
                         ? "Try adjusting your filters to see more results."
                         : "Applications will appear here once students start applying."}
                     </p>
@@ -604,142 +747,142 @@ export default function DepartmentPage() {
                       applicant,
                       preferenceType
                     );
-
                     return (
                       <Card
                         key={applicant.id}
-                        className="neo-card transition-all duration-300 hover:scale-[1.02]"
+                        className=" transition-all duration-300 hover:scale-[1.02]"
                       >
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-start">
+                        <CardContent className="p-4 sm:p-6">
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
                             <div className="flex-1 space-y-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 flex items-center justify-center">
-                                    <User className="h-6 w-6 text-primary" />
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                                    <User className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                                   </div>
-                                  <div>
+                                  <div className="min-w-0 flex-1">
                                     <button
                                       onClick={() => {
                                         setSelectedApplicant(applicant);
                                         setIsDialogOpen(true);
                                       }}
-                                      className="text-lg font-semibold text-foreground hover:text-primary transition-colors text-left"
+                                      className="text-base sm:text-lg font-semibold text-foreground hover:text-primary transition-colors text-left truncate"
                                     >
                                       {applicant.name || "N/A"}
                                     </button>
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <Mail className="h-3 w-3" />
-                                      {applicant.email}
+                                    <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground truncate">
+                                      <Mail className="h-3 w-3 flex-shrink-0" />
+                                      <span className="truncate">{applicant.email}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <Hash className="h-3 w-3" />
-                                      {applicant.register_no}
+                                    <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground truncate">
+                                      <Hash className="h-3 w-3 flex-shrink-0" />
+                                      <span className="truncate">{applicant.register_no}</span>
                                     </div>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                                   <Badge
                                     variant="outline"
-                                    className={
+                                    className={`text-xs sm:text-sm ${
                                       preferenceType === "first"
                                         ? "border-primary text-primary bg-primary/10"
                                         : ""
-                                    }
+                                    }`}
                                   >
-                                    {preferenceType === "first" ? "1st" : "2nd"}{" "}
-                                    Preference
+                                    {preferenceType === "first" ? "1st" : "2nd"} Preference
                                   </Badge>
                                   {getStatusBadge(currentStatus)}
                                 </div>
                               </div>
-
-                              <div className="flex items-center justify-between pt-4 border-t border-border">
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      handleStatusUpdate(
-                                        applicant.id,
-                                        "accepted",
-                                        preferenceType
-                                      )
-                                    }
-                                    disabled={
-                                      currentStatus === "accepted" || isUpdating
-                                    }
-                                    className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20"
-                                  >
-                                    Accept
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      handleStatusUpdate(
-                                        applicant.id,
-                                        "shortlisted",
-                                        preferenceType
-                                      )
-                                    }
-                                    disabled={
-                                      currentStatus === "shortlisted" ||
-                                      isUpdating
-                                    }
-                                    className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                                  >
-                                    Shortlist
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      handleStatusUpdate(
-                                        applicant.id,
-                                        "waitlisted",
-                                        preferenceType
-                                      )
-                                    }
-                                    disabled={
-                                      currentStatus === "waitlisted" ||
-                                      isUpdating
-                                    }
-                                    className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
-                                  >
-                                    Waitlist
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      handleStatusUpdate(
-                                        applicant.id,
-                                        "rejected",
-                                        preferenceType
-                                      )
-                                    }
-                                    disabled={
-                                      currentStatus === "rejected" || isUpdating
-                                    }
-                                    className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
-                                  >
-                                    Reject
-                                  </Button>
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setSelectedApplicant(applicant);
-                                      setIsMarksDialogOpen(true);
-                                    }}
-                                    className="border-2"
-                                  >
-                                    <NotebookText className="mr-2 h-4 w-4" />
-                                    View Marks
-                                  </Button>
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-border gap-3">
+                                {canShortlist && (
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleStatusUpdate(
+                                          applicant.id,
+                                          "shortlisted",
+                                          preferenceType
+                                        )
+                                      }
+                                      disabled={
+                                        currentStatus === "shortlisted" ||
+                                        isUpdating
+                                      }
+                                      className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 text-xs sm:text-sm"
+                                    >
+                                      Shortlist
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleStatusUpdate(
+                                          applicant.id,
+                                          "waitlisted",
+                                          preferenceType
+                                        )
+                                      }
+                                      disabled={
+                                        currentStatus === "waitlisted" ||
+                                        isUpdating
+                                      }
+                                      className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/20 text-xs sm:text-sm"
+                                    >
+                                      Waitlist
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleStatusUpdate(
+                                          applicant.id,
+                                          "rejected",
+                                          preferenceType
+                                        )
+                                      }
+                                      disabled={
+                                        currentStatus === "rejected" || isUpdating
+                                      }
+                                      className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs sm:text-sm"
+                                    >
+                                      Reject
+                                    </Button>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap gap-2 items-center">
+                                  {canPanel && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedApplicant(applicant);
+                                        setIsMarksDialogOpen(true);
+                                      }}
+                                        className="border-2 text-xs sm:text-sm"
+                                    >
+                                        <NotebookText className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                                        <span className="hidden sm:inline">View Marks</span>
+                                        <span className="sm:hidden">Marks</span>
+                                    </Button>
+                                      {/* Average Marks Indicator */}
+                                      {applicantAverages[applicant.id] && (
+                                        <Badge 
+                                          variant="outline" 
+                                          className={`text-xs ${getAverageScoreBadge(applicantAverages[applicant.id]!.average)}`}
+                                        >
+                                          <Star className="h-3 w-3 mr-1" />
+                                          {applicantAverages[applicant.id]?.average}
+                                          <span className="ml-1 opacity-70">
+                                            ({applicantAverages[applicant.id]?.totalEvaluators})
+                                          </span>
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -747,10 +890,11 @@ export default function DepartmentPage() {
                                       setSelectedApplicant(applicant);
                                       setIsDialogOpen(true);
                                     }}
-                                    className="border-2"
+                                    className="border-2 text-xs sm:text-sm"
                                   >
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View Details
+                                    <Eye className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                                    <span className="hidden sm:inline">View Details</span>
+                                    <span className="sm:hidden">Details</span>
                                   </Button>
                                 </div>
                               </div>
@@ -765,229 +909,539 @@ export default function DepartmentPage() {
             </CardContent>
           </Card>
 
-          {/* Panel Members Dialog */}
-          <Dialog
-            open={isPanelMembersDialogOpen}
-            onOpenChange={setIsPanelMembersDialogOpen}
-          >
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">
-                  Panel Members
-                </DialogTitle>
-                <DialogDescription>
-                  Manage panel members for {selectedPanel?.name}
-                </DialogDescription>
-              </DialogHeader>
-              <Select
-                onValueChange={async (value) => {
-                  if (selectedPanel) {
-                    const res = await addRecruiterToPanel(
-                      value,
-                      deptId,
-                      selectedPanel?.id
-                    );
-                    if (res) {
-                      toast.success("Recruiter added to panel successfully");
-                      setPanelMembers([]);
-                    } else {
-                      toast.error("Failed to add recruiter to panel");
-                    }
-                  }
-                }}
-              >
-                <SelectTrigger className="">
-                  <SelectValue placeholder="Add Recruiters" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departmentRecruiters.map((recruiter) => (
-                    <SelectItem value={recruiter.id} key={recruiter.id}>
-                      {recruiter.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Remove</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {panelMembers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={2} className="text-center py-12">
-                        No members found in this panel
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    panelMembers.map((member) => (
-                      <TableRow key={member.id}>
-                        <TableCell>{member.name}</TableCell>
-                        <TableCell>{member.email}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            onClick={async () => {
-                              if (!selectedPanel?.id) return;
-                              const res = await removeRecruiterFromPanel(
-                                member.id,
-                                selectedPanel?.id
+          {/* Panel Dialog with Tabs */}
+          {canPanel && (
+            <Dialog open={isPanelDialogOpen} onOpenChange={setIsPanelDialogOpen}>
+              <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden border-0">
+                <DialogHeader className="pb-4 border-b">
+                  <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <Users className="h-6 w-6 text-primary" />
+                    </div>
+                    Manage Panel: {selectedPanel?.name}
+                  </DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
+                    Add recruiters and assign applicants to this panel
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <Tabs value={panelDialogTab} onValueChange={setPanelDialogTab} className="flex-1">
+                  <TabsList className="grid w-full grid-cols-2 mb-6">
+                    <TabsTrigger value="recruiters" className="flex items-center gap-2">
+                      <UserPlus className="h-4 w-4" />
+                      Manage Recruiters
+                    </TabsTrigger>
+                    <TabsTrigger value="applicants" className="flex items-center gap-2">
+                      <UserCheck className="h-4 w-4" />
+                      Assign Applicants
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="recruiters" className="space-y-6">
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <UserPlus className="h-4 w-4" />
+                        Add Recruiter to Panel
+                      </h3>
+                      <div className="flex gap-3 items-end">
+                        <div className="flex-1">
+                          <label className="text-sm font-medium mb-2 block">Select Recruiter</label>
+                    <Select
+                      onValueChange={async (value) => {
+                        if (selectedPanel) {
+                          const res = await addRecruiterToPanel(
+                            value,
+                            deptId,
+                            selectedPanel?.id
+                          );
+                          if (res) {
+                            toast({ title: 'Success', description: 'Recruiter added to panel successfully' });
+                            setPanelMembers([]);
+                          } else {
+                            toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
+                          }
+                        }
+                      }}
+                    >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choose a recruiter to add..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departmentRecruiters.map((recruiter) => (
+                          <SelectItem value={recruiter.id} key={recruiter.id}>
+                            {recruiter.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-card border rounded-lg">
+                      <div className="p-4 border-b bg-muted/30">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Current Panel Members
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {panelMembers.length} member{panelMembers.length !== 1 ? 's' : ''} in this panel
+                        </p>
+                      </div>
+                      <div className="overflow-hidden">
+                        {panelMembers.length === 0 ? (
+                          <div className="p-8 text-center">
+                            <Users className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                            <p className="text-muted-foreground font-medium">No members found in this panel</p>
+                            <p className="text-sm text-muted-foreground mt-1">Add recruiters using the form above</p>
+                          </div>
+                        ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                                <TableHead className="font-semibold">Name</TableHead>
+                                <TableHead className="font-semibold">Email</TableHead>
+                                <TableHead className="font-semibold text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                              {panelMembers.map((member) => (
+                                <TableRow key={member.id} className="hover:bg-muted/50">
+                                  <TableCell className="font-medium">{member.name}</TableCell>
+                                  <TableCell className="text-muted-foreground">{member.email}</TableCell>
+                                  <TableCell className="text-right">
+                                <Button
+                                      size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    if (!selectedPanel?.id) return;
+                                    const res = await removeRecruiterFromPanel(
+                                      member.id,
+                                      selectedPanel?.id
+                                    );
+                                    if (res) {
+                                      toast({ title: 'Success', description: 'Recruiter removed from panel successfully' });
+                                      setPanelMembers((prev) =>
+                                        prev.filter((m) => m.id !== member.id)
+                                      );
+                                    } else {
+                                      toast({ title: 'Error', description: 'Failed to remove recruiter', variant: 'destructive' });
+                                    }
+                                  }}
+                                      className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                                >
+                                      <Trash2 className="h-4 w-4 mr-1" />
+                                      Remove
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                              ))}
+                      </TableBody>
+                    </Table>
+                        )}
+                      </div>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="applicants" className="space-y-6">
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <UserCheck className="h-4 w-4" />
+                        Assign Shortlisted Applicants
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Manage applicant assignments to this panel. Applicants assigned to other panels in this department cannot be assigned here.
+                      </p>
+                    </div>
+
+                    <div className="bg-card border rounded-lg overflow-hidden">
+                      <div className="p-4 border-b bg-muted/30">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <ListTodo className="h-4 w-4" />
+                          Applicant List
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {shortlistedApplicants.length} shortlisted applicant{shortlistedApplicants.length !== 1 ? 's' : ''} found
+                        </p>
+                      </div>
+                      
+                      <div className="overflow-x-auto">
+                        {shortlistedApplicants.length === 0 ? (
+                          <div className="p-8 text-center">
+                            <UserCheck className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                            <p className="text-muted-foreground font-medium">No shortlisted applicants found</p>
+                            <p className="text-sm text-muted-foreground mt-1">Shortlisted applicants will appear here for assignment</p>
+                          </div>
+                        ) : (
+                          <Table>
+                      <TableHeader>
+                              <TableRow className="bg-muted/30">
+                                <TableHead className="font-semibold">Applicant Name</TableHead>
+                                <TableHead className="font-semibold">Email</TableHead>
+                                <TableHead className="font-semibold">Preference</TableHead>
+                                <TableHead className="font-semibold">Assignment Status</TableHead>
+                                <TableHead className="font-semibold text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                              {shortlistedApplicants.map((a) => {
+                            // Show a row for each preference
+                            const rows = [];
+                            if (a.preference === 'first' || a.preference === 'both') {
+                                  const isAssignedToThisPanel = a.first_pref_panel_id === selectedPanel?.id;
+                                  const isAssignedToOtherPanel = a.first_pref_panel_id && a.first_pref_panel_id !== selectedPanel?.id;
+                                  
+                              rows.push(
+                                    <TableRow key={a.id + '-first'} className="hover:bg-muted/30">
+                                      <TableCell className="font-medium">{a.name}</TableCell>
+                                      <TableCell className="text-muted-foreground">{a.email}</TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                          First Preference
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        {isAssignedToThisPanel ? (
+                                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                                            <CheckCircle className="h-3 w-3 mr-1" />
+                                            Assigned to this panel
+                                          </Badge>
+                                        ) : isAssignedToOtherPanel ? (
+                                          <Badge variant="secondary" className="bg-orange-500 hover:bg-orange-600 text-white">
+                                            <AlertCircle className="h-3 w-3 mr-1" />
+                                            Assigned to other panel
+                                          </Badge>
+                                        ) : (
+                                          <Badge variant="outline" className="bg-gray-50 text-gray-600">
+                                            <Clock className="h-3 w-3 mr-1" />
+                                            Unassigned
+                                          </Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex gap-2 justify-end">
+                                    <Button
+                                      size="sm"
+                                            variant={isAssignedToThisPanel ? 'default' : 'outline'}
+                                            disabled={isAssignedToThisPanel || isAssignedToOtherPanel}
+                                      onClick={() => handleAssignApplicantToPanel(a.id, 'first')}
+                                            className={isAssignedToThisPanel ? 'bg-green-600 hover:bg-green-700' : ''}
+                                          >
+                                            {isAssignedToThisPanel ? (
+                                              <>
+                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                Assigned
+                                              </>
+                                            ) : (
+                                              <>
+                                                <UserPlus className="h-3 w-3 mr-1" />
+                                                Assign
+                                              </>
+                                            )}
+                                    </Button>
+                                          {isAssignedToThisPanel && (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={async () => {
+                                        try {
+                                          await removeApplicantFromPanel(a.id, 'first');
+                                          toast({ title: 'Removed', description: 'Applicant removed from panel' });
+                                                  setShortlistedApplicants(await getShortlistedApplicantsWithAssignmentStatus(deptId, selectedPanel?.id));
+                                        } catch (err: any) {
+                                          toast({ title: 'Error', description: err?.message || 'Failed to remove', variant: 'destructive' });
+                                        }
+                                      }}
+                                    >
+                                              <UserMinus className="h-3 w-3 mr-1" />
+                                      Remove
+                                    </Button>
+                                          )}
+                                        </div>
+                                  </TableCell>
+                                </TableRow>
                               );
-                              if (res) {
-                                toast.success("Recruiter removed from panel");
-                                setPanelMembers((prev) =>
-                                  prev.filter((m) => m.id !== member.id)
-                                );
-                              } else {
-                                toast.error("Failed to remove recruiter");
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </DialogContent>
-          </Dialog>
+                            }
+                            if (a.preference === 'second' || a.preference === 'both') {
+                                  const isAssignedToThisPanel = a.second_pref_panel_id === selectedPanel?.id;
+                                  const isAssignedToOtherPanel = a.second_pref_panel_id && a.second_pref_panel_id !== selectedPanel?.id;
+                                  
+                              rows.push(
+                                    <TableRow key={a.id + '-second'} className="hover:bg-muted/30">
+                                      <TableCell className="font-medium">{a.name}</TableCell>
+                                      <TableCell className="text-muted-foreground">{a.email}</TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                                          Second Preference
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        {isAssignedToThisPanel ? (
+                                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                                            <CheckCircle className="h-3 w-3 mr-1" />
+                                            Assigned to this panel
+                                          </Badge>
+                                        ) : isAssignedToOtherPanel ? (
+                                          <Badge variant="secondary" className="bg-orange-500 hover:bg-orange-600 text-white">
+                                            <AlertCircle className="h-3 w-3 mr-1" />
+                                            Assigned to other panel
+                                          </Badge>
+                                        ) : (
+                                          <Badge variant="outline" className="bg-gray-50 text-gray-600">
+                                            <Clock className="h-3 w-3 mr-1" />
+                                            Unassigned
+                                          </Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex gap-2 justify-end">
+                                    <Button
+                                      size="sm"
+                                            variant={isAssignedToThisPanel ? 'default' : 'outline'}
+                                            disabled={isAssignedToThisPanel || isAssignedToOtherPanel}
+                                      onClick={() => handleAssignApplicantToPanel(a.id, 'second')}
+                                            className={isAssignedToThisPanel ? 'bg-green-600 hover:bg-green-700' : ''}
+                                          >
+                                            {isAssignedToThisPanel ? (
+                                              <>
+                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                Assigned
+                                              </>
+                                            ) : (
+                                              <>
+                                                <UserPlus className="h-3 w-3 mr-1" />
+                                                Assign
+                                              </>
+                                            )}
+                                    </Button>
+                                          {isAssignedToThisPanel && (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={async () => {
+                                        try {
+                                          await removeApplicantFromPanel(a.id, 'second');
+                                          toast({ title: 'Removed', description: 'Applicant removed from panel' });
+                                                  setShortlistedApplicants(await getShortlistedApplicantsWithAssignmentStatus(deptId, selectedPanel?.id));
+                                        } catch (err: any) {
+                                          toast({ title: 'Error', description: err?.message || 'Failed to remove', variant: 'destructive' });
+                                        }
+                                      }}
+                                    >
+                                              <UserMinus className="h-3 w-3 mr-1" />
+                                      Remove
+                                    </Button>
+                                          )}
+                                        </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            }
+                            return rows;
+                              })}
+                      </TableBody>
+                    </Table>
+                        )}
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* New Panel Dialog */}
-          <Dialog
-            open={isNewPanelDialogOpen}
-            onOpenChange={setIsNewPanelDialogOpen}
-          >
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">
-                  New Panel
-                </DialogTitle>
-                <DialogDescription>
-                  Create a new panel for {departmentName} department
-                </DialogDescription>
-              </DialogHeader>
-              <form
-                action={async (e) => {
-                  const panelName = e.get("new_panel_name")?.toString();
-                  console.log("Creating panel with name:", panelName);
-                  if (panelName) {
-                    const data = await createPanel(panelName, deptId);
-                    if (data) {
-                      setIsNewPanelDialogOpen(false);
-                      toast.success("New panel created successfully");
-                      setPanels([]); // Clear panels to refetch
-                    } else {
-                      toast.error("Failed to create new panel");
+          {canPanel && (
+            <Dialog
+              open={isNewPanelDialogOpen}
+              onOpenChange={setIsNewPanelDialogOpen}
+            >
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto  border-0">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-semibold">
+                    New Panel
+                  </DialogTitle>
+                  <DialogDescription>
+                    Create a new panel for {departmentName} department
+                  </DialogDescription>
+                </DialogHeader>
+                <form
+                  action={async (e) => {
+                    const panelName = e.get("new_panel_name")?.toString();
+                    console.log("Creating panel with name:", panelName);
+                    if (panelName) {
+                      const data = await createPanel(panelName, deptId);
+                      if (data) {
+                        setIsNewPanelDialogOpen(false);
+                        toast({ title: 'Success', description: 'New panel created successfully' });
+                        setPanels([]); // Clear panels to refetch
+                      } else {
+                        toast({ title: 'Error', description: 'Failed to create new panel', variant: 'destructive' });
+                      }
                     }
-                  }
-                }}
-              >
-                <Input placeholder="Panel Name" name="new_panel_name" />
-                <Button type="submit" className="mt-4 w-full">
-                  Create
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  }}
+                >
+                  <Input placeholder="Panel Name" name="new_panel_name" />
+                  <Button type="submit" className="mt-4 w-full">
+                    Create
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Applicant Marks Dialog */}
-          <Dialog open={isMarksDialogOpen} onOpenChange={setIsMarksDialogOpen}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
-              <DialogHeader>
-                <div className="flex justify-between p-3">
-                  <div>
-                    <DialogTitle className="text-xl font-semibold">
-                      Applicant Marks
-                    </DialogTitle>
-                    <DialogDescription>
-                      Marks and remarks for {selectedApplicant?.name}
-                    </DialogDescription>
-                  </div>
-                  {/* Accept and Reject Button */}
-                  {selectedApplicant && (
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={async () => {
-                          const preferenceType =
-                            getPreferenceType(selectedApplicant);
-                          const data = await handleStatusUpdate(
-                            selectedApplicant.id,
-                            "accepted",
-                            preferenceType
-                          );
-                          if (data) {
-                            setIsMarksDialogOpen(false);
-                            toast.success("Application accepted successfully");
-                          } else {
-                            toast.error("Failed to accept application");
-                          }
-                        }}
-                        variant="outline"
-                        className="border-2 border-green-600 hover:bg-green-600"
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          const preferenceType =
-                            getPreferenceType(selectedApplicant);
-                          const data = await handleStatusUpdate(
-                            selectedApplicant.id,
-                            "rejected",
-                            preferenceType
-                          );
-                          if (data) {
-                            setIsMarksDialogOpen(false);
-                            toast.success("Application rejected successfully");
-                          } else {
-                            toast.error("Failed to reject application");
-                          }
-                        }}
-                        variant="outline"
-                        className="border-2 border-red-600 hover:bg-red-600"
-                      >
-                        Reject
-                      </Button>
+          {canPanel && (
+            <Dialog open={isMarksDialogOpen} onOpenChange={setIsMarksDialogOpen}>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto border-0">
+                <DialogHeader>
+                  <div className="flex justify-between p-3">
+                    <div>
+                      <DialogTitle className="text-xl font-semibold">
+                        Applicant Marks
+                      </DialogTitle>
+                      <DialogDescription>
+                        Marks and remarks for {selectedApplicant?.name}
+                      </DialogDescription>
                     </div>
-                  )}
-                </div>
-              </DialogHeader>
+                    {/* Accept and Reject Button - Only for Recruiters */}
+                    {selectedApplicant && isRecruiterForDepartment && (
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={async () => {
+                            const preferenceType =
+                              getPreferenceType(selectedApplicant);
+                            const data = await handleStatusUpdate(
+                              selectedApplicant.id,
+                              "accepted",
+                              preferenceType
+                            );
+                            if (data) {
+                              setIsMarksDialogOpen(false);
+                              toast({ title: 'Success', description: 'Application accepted successfully' });
+                            } else {
+                              toast({ title: 'Error', description: 'Failed to accept application', variant: 'destructive' });
+                            }
+                          }}
+                          variant="outline"
+                          className="border-2 border-green-600 hover:bg-green-600"
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            const preferenceType =
+                              getPreferenceType(selectedApplicant);
+                            const data = await handleStatusUpdate(
+                              selectedApplicant.id,
+                              "rejected",
+                              preferenceType
+                            );
+                            if (data) {
+                              setIsMarksDialogOpen(false);
+                              toast({ title: 'Success', description: 'Application rejected successfully' });
+                            } else {
+                              toast({ title: 'Error', description: 'Failed to reject application', variant: 'destructive' });
+                            }
+                          }}
+                          variant="outline"
+                          className="border-2 border-red-600 hover:bg-red-600"
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+                    {/* Show message for evaluators */}
+                    {selectedApplicant && !isRecruiterForDepartment && (
+                      <div className="text-sm text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
+                        <p className="font-medium">Evaluator Access</p>
+                        <p>You can view marks and evaluations, but only recruiters can accept or reject applications.</p>
+                      </div>
+                    )}
+                  </div>
+                </DialogHeader>
 
-              {selectedApplicant && evaluations.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Recruiter</TableHead>
-                      <TableHead>Score</TableHead>
-                      <TableHead>Remarks</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {evaluations.map((evaluation) => (
-                      <TableRow key={evaluation.recruiter.full_name}>
-                        <TableCell>{evaluation.recruiter.full_name}</TableCell>
-                        <TableCell>{evaluation.score}</TableCell>
-                        <TableCell>{evaluation.remarks}</TableCell>
+                {selectedApplicant && evaluations.length > 0 ? (
+                  <div className="space-y-6">
+                    {/* Average Marks Summary */}
+                    {averageMarks && (
+                      <div className="bg-muted/30 rounded-lg p-4">
+                        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                          <Star className="h-4 w-4" />
+                          Performance Summary
+                        </h3>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-primary">
+                              {averageMarks.average}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Average Score</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-blue-600">
+                              {averageMarks.totalMarks}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Total Marks</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-green-600">
+                              {averageMarks.totalEvaluators}
+                            </p>
+                            <p className="text-sm text-muted-foreground">Evaluators</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Individual Evaluations Table */}
+                    <div className="bg-card border rounded-lg overflow-hidden">
+                      <div className="p-4 border-b bg-muted/30">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <NotebookText className="h-4 w-4" />
+                          Individual Evaluations
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Detailed scores and remarks from each evaluator
+                        </p>
+                      </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                            <TableHead className="font-semibold">Evaluator</TableHead>
+                            <TableHead className="font-semibold">Score</TableHead>
+                            <TableHead className="font-semibold">Remarks</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="text-center py-12">
-                  <p>No evaluations found !</p>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
+                    </TableHeader>
+                    <TableBody>
+                      {evaluations.map((evaluation) => (
+                            <TableRow key={evaluation.recruiter.full_name} className="hover:bg-muted/30">
+                              <TableCell className="font-medium">{evaluation.recruiter.full_name}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                  {evaluation.score}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{evaluation.remarks}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <NotebookText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-muted-foreground font-medium">No evaluations found</p>
+                    <p className="text-sm text-muted-foreground mt-1">Evaluators will appear here once they submit marks</p>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Applicant Details Dialog */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto neo-card border-0">
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto border-0">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold">
                   Applicant Details
@@ -1096,9 +1550,7 @@ export default function DepartmentPage() {
                       </Label>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-3 w-3" />
-                        {new Date(
-                          selectedApplicant.created_at
-                        ).toLocaleString()}
+                        {new Date(selectedApplicant.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
                       </div>
                     </div>
                   </div>
@@ -1106,60 +1558,62 @@ export default function DepartmentPage() {
               )}
 
               <DialogFooter>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => {
-                      if (selectedApplicant) {
-                        const preferenceType =
-                          getPreferenceType(selectedApplicant);
-                        handleStatusUpdate(
-                          selectedApplicant.id,
-                          "shortlisted",
-                          preferenceType
-                        );
-                      }
-                    }}
-                    disabled={isUpdating}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    Shortlist
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      if (selectedApplicant) {
-                        const preferenceType =
-                          getPreferenceType(selectedApplicant);
-                        handleStatusUpdate(
-                          selectedApplicant.id,
-                          "waitlisted",
-                          preferenceType
-                        );
-                      }
-                    }}
-                    disabled={isUpdating}
-                    className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                  >
-                    Waitlist
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      if (selectedApplicant) {
-                        const preferenceType =
-                          getPreferenceType(selectedApplicant);
-                        handleStatusUpdate(
-                          selectedApplicant.id,
-                          "rejected",
-                          preferenceType
-                        );
-                      }
-                    }}
-                    disabled={isUpdating}
-                  >
-                    Reject
-                  </Button>
-                </div>
+                {canShortlist && (
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => {
+                        if (selectedApplicant) {
+                          const preferenceType =
+                            getPreferenceType(selectedApplicant);
+                          handleStatusUpdate(
+                            selectedApplicant.id,
+                            "shortlisted",
+                            preferenceType
+                          );
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      Shortlist
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (selectedApplicant) {
+                          const preferenceType =
+                            getPreferenceType(selectedApplicant);
+                          handleStatusUpdate(
+                            selectedApplicant.id,
+                            "waitlisted",
+                            preferenceType
+                          );
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                    >
+                      Waitlist
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (selectedApplicant) {
+                          const preferenceType =
+                            getPreferenceType(selectedApplicant);
+                          handleStatusUpdate(
+                            selectedApplicant.id,
+                            "rejected",
+                            preferenceType
+                          );
+                        }
+                      }}
+                      disabled={isUpdating}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                )}
               </DialogFooter>
             </DialogContent>
           </Dialog>

@@ -9,9 +9,64 @@ import { Toaster } from "@/components/ui/sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Recruitment Portal",
-  description: "A full-stack recruitment portal",
-  generator: "v0.dev",
+  title: "Better Join Hackclub",
+  description: "Hackclub Recruitment Portal",
+  generator: "Next.js",
+  icons: {
+    icon: [
+      {
+        url: "/hclogo.png",
+        sizes: "32x32",
+        type: "image/png",
+      },
+      {
+        url: "/hclogo.png",
+        sizes: "16x16",
+        type: "image/png",
+      },
+    ],
+    apple: [
+      {
+        url: "/hclogo.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
+    shortcut: "/hclogo.png",
+  },
+  openGraph: {
+    title: "Better Join Hackclub",
+    description: "Join our community of innovators and creators",
+    url: "join.hackclubvit.xyz",
+    siteName: "Hackclub Recruitment Portal",
+    images: [
+      {
+        url: "/hclogo.png",
+        width: 1200,
+        height: 630,
+        alt: "HackClub Recruitment Portal",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "HackClub Recruitment Portal",
+    description: "Join our community of innovators and creators",
+    images: ["/hclogo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  }
 };
 
 export default function RootLayout({

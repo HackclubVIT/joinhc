@@ -58,7 +58,27 @@ export type RecruiterDepartment = {
 
 export type ApplicationSettings = {
   id: string;
+  deadline_name: "application" | "shortlist";
   deadline: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+
+export type PanelTimeSlot = {
+  id: string;
+  panel_id: string;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ApplicantTimeSlot = {
+  id: string;
+  applicant_id: string;
+  panel_id: string;
+  time_slot_id: string;
   created_at: string;
   updated_at: string;
 };
@@ -109,16 +129,16 @@ export async function getApplicationForUser() {
   }
 }
 
-// Add new function to get selected department for shortlisted applications
+
 export async function getSelectedDepartmentForApplication(
   applicationId: string
 ): Promise<string | null> {
   const supabase = createClient();
 
   try {
-    // This would need to be determined by your business logic
-    // For now, we'll assume first preference is selected unless specified otherwise
-    // You might want to add a 'selected_department_id' field to applications table
+    
+    
+    
     const { data, error } = await supabase
       .from("applications")
       .select(
@@ -136,8 +156,8 @@ export async function getSelectedDepartmentForApplication(
       return null;
     }
 
-    // For now, return first preference department name
-    // You should modify this logic based on how you track which department was selected
+    
+    
     return data.first_dept?.name || null;
   } catch (err) {
     console.error("Error in getSelectedDepartmentForApplication:", err);
@@ -155,7 +175,8 @@ export async function saveApplication(applicationData: {
   second_pref_reason: string;
   priority_reason: string;
   portfolio_link?: string;
-  status?: string;
+  first_pref_status?: "pending" | "shortlisted" | "waitlisted" | "rejected" | "accepted";
+  second_pref_status?: "pending" | "shortlisted" | "waitlisted" | "rejected" | "accepted";
 }) {
   const supabase = createClient();
 
@@ -169,9 +190,12 @@ export async function saveApplication(applicationData: {
       .eq("applicant_id", user.id)
       .single();
 
+    
     const dataToSave = {
       applicant_id: user.id,
       ...applicationData,
+      first_pref_status: applicationData.first_pref_status || "pending",
+      second_pref_status: applicationData.second_pref_status || "pending",
       updated_at: new Date().toISOString(),
     };
 
@@ -288,17 +312,10 @@ export async function getDepartments() {
   }
 }
 
-export async function getRecruiterDepartments(userId?: string) {
+export async function getRecruiterDepartments(recruiterId: string) {
   const supabase = createClient();
 
   try {
-    let targetUserId = userId;
-    if (!targetUserId) {
-      const user = await getCurrentUser();
-      if (!user) return [];
-      targetUserId = user.id;
-    }
-
     const { data, error } = await supabase
       .from("recruiter_departments")
       .select(
@@ -307,22 +324,18 @@ export async function getRecruiterDepartments(userId?: string) {
         department:departments(id, name, description)
       `
       )
-      .eq("recruiter_id", targetUserId);
+      .eq("recruiter_id", recruiterId);
 
     if (error) {
       console.error("Error fetching recruiter departments:", error);
       return [];
     }
 
-    console.log("Raw recruiter departments data:", data);
-
-    // Ensure we have consistent data structure
+    
     const processedData = data.map((item) => ({
       ...item,
       department_id: item.department?.id || item.department_id,
     }));
-
-    console.log("Processed recruiter departments:", processedData);
 
     return processedData as RecruiterDepartment[];
   } catch (err) {
@@ -390,185 +403,241 @@ export async function removeDepartmentFromRecruiter(assignmentId: string) {
   }
 }
 
+
 export async function getAllRecruiters() {
   const supabase = createClient();
-
-  try {
-    const isAdmin = await isCurrentUserRecruiter();
-    if (!isAdmin) {
-      throw new Error("Only recruiters can view all recruiters");
-    }
-
     const { data, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, role")
-      .eq("role", "recruiter")
-      .order("full_name");
-
-    if (error) {
-      console.error("Error fetching recruiters:", error);
-      return [];
-    }
-
+    .from('profiles')
+    .select('id, full_name, email, role')
+    .eq('role', 'recruiter')
+    .order('full_name');
+  if (error) throw error;
     return data;
-  } catch (err) {
-    console.error("Error in getAllRecruiters:", err);
-    return [];
-  }
+}
+
+
+export async function getAllDepartments() {
+  const supabase = createClient();
+    const { data, error } = await supabase
+    .from('departments')
+    .select('*')
+    .order('name');
+  if (error) throw error;
+  return data;
+}
+
+
+export async function assignRecruiterToDepartment(recruiterId: string, departmentId: string, role: 'recruiter' | 'evaluator') {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('recruiter_departments')
+    .insert({ recruiter_id: recruiterId, department_id: departmentId, role })
+    .select()
+    .single();
+  if (error) throw error;
+    return data;
+}
+
+
+export async function removeRecruiterFromDepartment(recruiterId: string, departmentId: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('recruiter_departments')
+    .delete()
+    .eq('recruiter_id', recruiterId)
+    .eq('department_id', departmentId);
+  if (error) throw error;
+  return true;
 }
 
 export async function getAllUsers() {
   const supabase = createClient();
+  const { data, error } = await supabase.from('profiles').select('*');
+  if (error) throw error;
+    return data;
+}
 
-  try {
-    const isAdmin = await isCurrentUserRecruiter();
-    if (!isAdmin) {
-      throw new Error("Only recruiters can view all users");
+export async function updateUserRole(userId: string, newRole: 'admin' | 'recruiter' | 'applicant') {
+  const supabase = createClient();
+  const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+  if (error) throw error;
+  return true;
     }
 
+export async function createDepartment(name: string, description: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('departments').insert({ name, description }).select().single();
+  if (error) throw error;
+  return data;
+  }
+
+export async function getAllPanels() {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('recruitment_panel').select('*');
+  if (error) throw error;
+  return data;
+}
+
+
+
+export async function assignRecruiterToPanel(recruiterId: string, departmentId: string, panelId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('recruiter_departments').update({ panel_id: panelId }).eq('recruiter_id', recruiterId).eq('department_id', departmentId).select().single();
+  if (error) throw error;
+    return data;
+}
+
+
+
+export async function getShortlistedApplicantsByDepartment(departmentId: string) {
+  const supabase = createClient();
     const { data, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, role, register_no")
-      .order("role")
-      .order("full_name");
-
-    if (error) {
-      console.error("Error fetching users:", error);
-      return [];
-    }
-
-    return data;
-  } catch (err) {
-    console.error("Error in getAllUsers:", err);
-    return [];
-  }
-}
-
-export async function updateUserRole(
-  userId: string,
-  newRole: "applicant" | "recruiter"
-) {
-  const supabase = createClient();
-
-  try {
-    const isAdmin = await isCurrentUserRecruiter();
-    if (!isAdmin) {
-      throw new Error("Only recruiters can update user roles");
-    }
-
-    const { data, error } = await supabase.rpc("update_user_role", {
-      user_id: userId,
-      new_role: newRole,
-    });
-
-    if (error) {
-      console.error("Error updating user role:", error);
-      throw error;
-    }
-
-    return data;
-  } catch (err) {
-    console.error("Error in updateUserRole:", err);
-    throw err;
-  }
-}
-
-export async function getDepartmentApplicants(departmentId: string) {
-  const supabase = createClient();
-
-  function normalizeUuid(str: string) {
-    const cleaned = str.replace(/\s+/g, "").toLowerCase();
-    if (
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-        cleaned
-      )
-    ) {
-      return cleaned;
-    }
-
-    if (/^[0-9a-f]{32}$/.test(cleaned)) {
-      return `${cleaned.slice(0, 8)}-${cleaned.slice(8, 12)}-${cleaned.slice(
-        12,
-        16
-      )}-${cleaned.slice(16, 20)}-${cleaned.slice(20)}`;
-    }
-    return str;
-  }
-
-  function isUuid(str: string) {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      str
+    .from('applications')
+    .select('*')
+    .or(
+      `and(first_pref_dept_id.eq.${departmentId},first_pref_status.eq.shortlisted),and(second_pref_dept_id.eq.${departmentId},second_pref_status.eq.shortlisted)`
     );
-  }
-
-  const normalizedId = normalizeUuid(departmentId);
-  if (!isUuid(normalizedId)) {
-    console.error(
-      "Invalid departmentId passed to getDepartmentApplicants:",
-      departmentId
-    );
-    return [];
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from("applications")
-      .select("*")
-      .or(
-        `first_pref_dept_id.eq.${normalizedId},second_pref_dept_id.eq.${normalizedId}`
-      )
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching department applicants:", error);
-      return [];
+  if (error) throw error;
+  
+  const normDeptId = String(departmentId).trim();
+  const result = (data || []).map((a) => {
+    let preference = null;
+    const firstId = String(a.first_pref_dept_id).trim();
+    const secondId = String(a.second_pref_dept_id).trim();
+    if (firstId === normDeptId && a.first_pref_status === 'shortlisted') preference = 'first';
+    if (secondId === normDeptId && a.second_pref_status === 'shortlisted') preference = preference ? 'both' : 'second';
+    if (!preference) {
+      
+      
     }
-
-    return data;
-  } catch (err) {
-    console.error("Error in getDepartmentApplicants:", err);
-    return [];
-  }
+    return { ...a, preference };
+  });
+  return result;
 }
 
-export async function updateApplicationStatus(
-  applicationId: string,
-  status: string,
-  preference: "first" | "second"
-) {
+
+export async function getShortlistedApplicantsWithAssignmentStatus(departmentId: string, targetPanelId?: string) {
   const supabase = createClient();
-
-  try {
-    const updateField =
-      preference === "first" ? "first_pref_status" : "second_pref_status";
-
-    const { data, error } = await supabase
-      .from("applications")
-      .update({
-        [updateField]: status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", applicationId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error updating application status:", error);
-      throw error;
+  
+  
+  const { data: panels, error: panelsError } = await supabase
+    .from('recruitment_panel')
+    .select('id')
+    .eq('department_id', departmentId);
+  
+  if (panelsError) throw panelsError;
+  
+  const panelIds = panels.map(p => p.id);
+  
+  
+  const { data, error } = await supabase
+    .from('applications')
+    .select('*')
+    .or(
+      `and(first_pref_dept_id.eq.${departmentId},first_pref_status.eq.shortlisted),and(second_pref_dept_id.eq.${departmentId},second_pref_status.eq.shortlisted)`
+    );
+  
+  if (error) throw error;
+  
+  const normDeptId = String(departmentId).trim();
+  const result = (data || []).map((a) => {
+    const firstId = String(a.first_pref_dept_id).trim();
+    const secondId = String(a.second_pref_dept_id).trim();
+    
+    let preference = null;
+    let isAssignedToAnyPanel = false;
+    let isAssignedToTargetPanel = false;
+    
+    
+    if (firstId === normDeptId && a.first_pref_status === 'shortlisted') {
+      preference = 'first';
+      if (a.first_pref_panel_id && panelIds.includes(a.first_pref_panel_id)) {
+        isAssignedToAnyPanel = true;
+        if (targetPanelId && a.first_pref_panel_id === targetPanelId) {
+          isAssignedToTargetPanel = true;
+        }
+      }
     }
-
-    return data;
-  } catch (err) {
-    console.error("Error in updateApplicationStatus:", err);
-    throw err;
-  }
+    
+    
+    if (secondId === normDeptId && a.second_pref_status === 'shortlisted') {
+      if (preference) preference = 'both';
+      else preference = 'second';
+      
+      if (a.second_pref_panel_id && panelIds.includes(a.second_pref_panel_id)) {
+        isAssignedToAnyPanel = true;
+        if (targetPanelId && a.second_pref_panel_id === targetPanelId) {
+          isAssignedToTargetPanel = true;
+        }
+      }
+    }
+    
+    return { 
+      ...a, 
+      preference,
+      isAssignedToAnyPanel,
+      isAssignedToTargetPanel
+    };
+  });
+  
+  return result;
 }
 
-// Helper function to get overall application status based on preferences
+
+export async function getUnassignedShortlistedApplicantsByDepartment(departmentId: string) {
+  const applicants = await getShortlistedApplicantsWithAssignmentStatus(departmentId);
+  return applicants.filter(a => !a.isAssignedToAnyPanel);
+}
+
+export async function assignApplicantToPanel(applicantId: string, panelId: string, preference: 'first' | 'second') {
+  const supabase = createClient();
+  const field = preference === 'first' ? 'first_pref_panel_id' : 'second_pref_panel_id';
+  const { data, error } = await supabase.from('applications').update({ [field]: panelId }).eq('id', applicantId).select().single();
+  if (error) throw error;
+    return data;
+}
+
+
+export async function removeApplicantFromPanel(applicantId: string, preference: 'first' | 'second') {
+  const supabase = createClient();
+  const field = preference === 'first' ? 'first_pref_panel_id' : 'second_pref_panel_id';
+  const { error } = await supabase
+    .from('applications')
+    .update({ [field]: null })
+    .eq('id', applicantId);
+  if (error) throw error;
+  return true;
+}
+
+
+export async function getApplicationDeadline() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('application_settings')
+    .select('deadline')
+    .eq('deadline_name', 'application')
+    .single();
+  if (error) return null;
+  return data;
+}
+
+
+export async function getShortlistDeadline() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('application_settings')
+    .select('deadline')
+    .eq('deadline_name', 'shortlist')
+    .single();
+  if (error) return null;
+  return data;
+}
+
+
 export function getOverallApplicationStatus(
   application: Application
 ): "pending" | "shortlisted" | "waitlisted" | "rejected" | "accepted" {
-  // If either preference is shortlisted, overall is shortlisted
+  
 
   if (
     application.first_pref_status === "accepted" ||
@@ -584,7 +653,7 @@ export function getOverallApplicationStatus(
     return "shortlisted";
   }
 
-  // If either preference is waitlisted, overall is waitlisted
+  
   if (
     application.first_pref_status === "waitlisted" ||
     application.second_pref_status === "waitlisted"
@@ -592,7 +661,7 @@ export function getOverallApplicationStatus(
     return "waitlisted";
   }
 
-  // If both are rejected, overall is rejected
+  
   if (
     application.first_pref_status === "rejected" &&
     application.second_pref_status === "rejected"
@@ -600,11 +669,11 @@ export function getOverallApplicationStatus(
     return "rejected";
   }
 
-  // Otherwise, it's pending
+  
   return "pending";
 }
 
-// Helper function to get which department preference was shortlisted/waitlisted
+
 export function getPreferenceSelectionInfo(application: Application): {
   type: "first" | "second" | "both" | null;
   status: string;
@@ -694,7 +763,7 @@ export async function getAllApplicationsForExport(departmentId?: string) {
       return [];
     }
 
-    // Transform the data to include department names
+    
     const transformedData = data.map((app) => ({
       ...app,
       dept_first_pref: app.first_dept?.name || "Unknown",
@@ -729,6 +798,33 @@ export async function isCurrentUserRecruiter() {
     return data?.role === "recruiter";
   } catch (err) {
     console.error("Error in isCurrentUserRecruiter:", err);
+    return false;
+  }
+}
+
+
+export async function isCurrentUserRecruiterOrEvaluator(): Promise<boolean> {
+  const supabase = createClient();
+
+  try {
+    const user = await getCurrentUser();
+    if (!user) return false;
+
+    const { data, error } = await supabase
+      .from("recruiter_departments")
+      .select("role")
+      .eq("recruiter_id", user.id)
+      .limit(1);
+
+    if (error) {
+      console.error("Error checking if user is recruiter or evaluator:", error);
+      return false;
+    }
+
+    
+    return data && data.length > 0;
+  } catch (err) {
+    console.error("Error in isCurrentUserRecruiterOrEvaluator:", err);
     return false;
   }
 }
@@ -844,7 +940,7 @@ export async function magicLinkLogin(email: string) {
   }
 }
 
-// Add a new function for PKCE flow (if you want to use it)
+
 export async function verifyTokenHash(tokenHash: string, type: string) {
   const supabase = createClient();
 
@@ -915,6 +1011,29 @@ export async function getPanelsForRecruiter(departmentId: string) {
     return data.map((e) => e.panel as unknown as { id: string; name: string });
   } catch (err) {
     console.error("Error in getPanels:", err);
+    return [];
+  }
+}
+
+
+export async function getPanelsForUser(userId: string) {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruiter_departments")
+      .select("panel: recruitment_panel(id, name)")
+      .eq("recruiter_id", userId)
+      .not("panel_id", "is", null);
+
+    if (error) {
+      console.error("Error fetching panels for user:", error);
+      return [];
+    }
+
+    return data.map((e) => e.panel as unknown as { id: string; name: string });
+  } catch (err) {
+    console.error("Error in getPanelsForUser:", err);
     return [];
   }
 }
@@ -1024,7 +1143,7 @@ export async function updateOrCreateApplicantMark(
     }
 
     if (data.length > 0) {
-      // Update existing mark
+      
       const { error: updateError } = await supabase
         .from("evaluations")
         .update({
@@ -1038,7 +1157,7 @@ export async function updateOrCreateApplicantMark(
         return false;
       }
     } else {
-      // Create new mark
+      
       const { error: insertError } = await supabase.from("evaluations").insert({
         application_id: application_id,
         department_id: department_id,
@@ -1113,6 +1232,44 @@ export async function getApplicantMarks(
   } catch (err) {
     console.error("Error in getApplicantMarks:", err);
     return [];
+  }
+}
+
+
+export async function getApplicantAverageMarks(
+  application_id: string,
+  department_id: string
+): Promise<{ average: number; totalMarks: number; totalEvaluators: number } | null> {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("evaluations")
+      .select("score")
+      .eq("application_id", application_id)
+      .eq("department_id", department_id);
+
+    if (error) {
+      console.error("Error fetching applicant average marks:", error);
+      return null;
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    const totalMarks = data.reduce((sum, item) => sum + item.score, 0);
+    const totalEvaluators = data.length;
+    const average = totalMarks / totalEvaluators;
+
+    return {
+      average: Math.round(average * 100) / 100, 
+      totalMarks,
+      totalEvaluators
+    };
+  } catch (err) {
+    console.error("Error in getApplicantAverageMarks:", err);
+    return null;
   }
 }
 
@@ -1308,3 +1465,279 @@ export const getMeetLinkByPanelId = async (panel_id: string) => {
     return null;
   }
 };
+
+export async function getDepartmentApplicants(departmentId: string) {
+  const supabase = createClient();
+
+  function normalizeUuid(str: string) {
+    const cleaned = str.replace(/\s+/g, "").toLowerCase();
+    if (
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+        cleaned
+      )
+    ) {
+      return cleaned;
+    }
+
+    if (/^[0-9a-f]{32}$/.test(cleaned)) {
+      return `${cleaned.slice(0, 8)}-${cleaned.slice(8, 12)}-${cleaned.slice(
+        12,
+        16
+      )}-${cleaned.slice(16, 20)}-${cleaned.slice(20)}`;
+    }
+    return str;
+  }
+
+  function isUuid(str: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      str
+    );
+  }
+
+  const normalizedId = normalizeUuid(departmentId);
+  if (!isUuid(normalizedId)) {
+    console.error(
+      "Invalid departmentId passed to getDepartmentApplicants:",
+      departmentId
+    );
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("applications")
+      .select("*")
+      .or(
+        `first_pref_dept_id.eq.${normalizedId},second_pref_dept_id.eq.${normalizedId}`
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching department applicants:", error);
+      return [];
+    }
+
+    return data;
+  } catch (err) {
+    console.error("Error in getDepartmentApplicants:", err);
+    return [];
+  }
+}
+
+export async function updateRecruiterDepartmentRole(recruiterId: string, departmentId: string, newRole: 'recruiter' | 'evaluator') {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('recruiter_departments')
+    .update({ role: newRole })
+    .eq('recruiter_id', recruiterId)
+    .eq('department_id', departmentId);
+  if (error) throw error;
+  return true;
+}
+
+
+export async function isCurrentUserRecruiterForDepartment(departmentId: string): Promise<boolean> {
+  const supabase = createClient();
+  
+  try {
+    const user = await getCurrentUser();
+    if (!user) return false;
+
+    const { data, error } = await supabase
+      .from('recruiter_departments')
+      .select('role')
+      .eq('recruiter_id', user.id)
+      .eq('department_id', departmentId)
+      .single();
+
+    if (error) {
+      console.error('Error checking user role for department:', error);
+      return false;
+    }
+
+    
+    return data?.role === 'recruiter';
+  } catch (err) {
+    console.error('Error in isCurrentUserRecruiterForDepartment:', err);
+    return false;
+  }
+}
+export async function updateApplicationStatus(
+  applicationId: string,
+  status: string,
+  preference: "first" | "second"
+) {
+  const supabase = createClient();
+
+  try {
+    const updateField =
+      preference === "first" ? "first_pref_status" : "second_pref_status";
+
+    const { data, error } = await supabase
+      .from("applications")
+      .update({
+        [updateField]: status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", applicationId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating application status:", error);
+      throw error;
+    }
+
+    return data;
+  } catch (err) {
+    console.error("Error in updateApplicationStatus:", err);
+    throw err;
+  }
+}
+
+
+export async function assignApplicantsToPanels(departmentId: string, panelIds: string[], applicantIds: string[], preference: 'first' | 'second') {
+  const supabase = createClient();
+  if (panelIds.length === 0 || applicantIds.length === 0) return;
+  const field = preference === 'first' ? 'first_pref_panel_id' : 'second_pref_panel_id';
+  
+  const updates = applicantIds.map((applicantId, i) => ({
+    id: applicantId,
+    [field]: panelIds[i % panelIds.length],
+  }));
+  const { error } = await supabase.from('applications').upsert(updates, { onConflict: 'id' });
+  if (error) throw error;
+  return true;
+}
+
+
+export async function rebalanceApplicantsAcrossPanels(departmentId: string, panelIds: string[], preference: 'first' | 'second') {
+  const supabase = createClient();
+  const field = preference === 'first' ? 'first_pref_panel_id' : 'second_pref_panel_id';
+  
+  const { data: applicants, error } = await supabase
+    .from('applications')
+    .select('id')
+    .or(`${preference}_pref_dept_id.eq.${departmentId}`)
+    .in(`${preference}_pref_status`, ['shortlisted']);
+  if (error) throw error;
+  if (!applicants || applicants.length === 0) return;
+  const applicantIds = applicants.map((a) => a.id);
+  return assignApplicantsToPanels(departmentId, panelIds, applicantIds, preference);
+}
+
+
+export async function getPanelTimeSlots(panelId: string): Promise<PanelTimeSlot[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('panel_time_slots')
+    .select('*')
+    .eq('panel_id', panelId)
+    .order('start_time');
+  if (error) throw error;
+  return data;
+}
+
+export async function createPanelTimeSlot(panelId: string, start_time: string, end_time: string): Promise<PanelTimeSlot> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('panel_time_slots')
+    .insert({ panel_id: panelId, start_time, end_time })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePanelTimeSlot(timeSlotId: string, start_time: string, end_time: string): Promise<PanelTimeSlot> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('panel_time_slots')
+    .update({ start_time, end_time, updated_at: new Date().toISOString() })
+    .eq('id', timeSlotId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deletePanelTimeSlot(timeSlotId: string): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('panel_time_slots')
+    .delete()
+    .eq('id', timeSlotId);
+  if (error) throw error;
+  return true;
+}
+
+
+export async function getAvailableTimeSlotsForPanel(panelId: string): Promise<PanelTimeSlot[]> {
+  const supabase = createClient();
+  
+  const { data: allSlots, error: slotsError } = await supabase
+    .from('panel_time_slots')
+    .select('*')
+    .eq('panel_id', panelId)
+    .order('start_time');
+  if (slotsError) throw slotsError;
+  
+  const { data: booked, error: bookedError } = await supabase
+    .from('applicant_time_slot')
+    .select('time_slot_id');
+  if (bookedError) throw bookedError;
+  const bookedIds = new Set(booked.map((b: any) => b.time_slot_id));
+  
+  return allSlots.filter((slot: any) => !bookedIds.has(slot.id));
+}
+
+export async function getApplicantTimeSlot(applicantId: string, panelId: string): Promise<any | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('applicant_time_slot')
+    .select('*, panel_time_slots(start_time, end_time)')
+    .eq('applicant_id', applicantId)
+    .eq('panel_id', panelId)
+    .single();
+  if (error && error.code !== 'PGRST116') throw error;
+  if (!data) return null;
+  return {
+    ...data,
+    start_time: data.panel_time_slots?.start_time,
+    end_time: data.panel_time_slots?.end_time,
+  };
+}
+
+export async function bookApplicantTimeSlot(applicantId: string, panelId: string, timeSlotId: string): Promise<ApplicantTimeSlot> {
+  const supabase = createClient();
+  
+  const { data, error } = await supabase
+    .from('applicant_time_slot')
+    .upsert({ applicant_id: applicantId, panel_id: panelId, time_slot_id: timeSlotId, updated_at: new Date().toISOString() }, { onConflict: 'applicant_id,panel_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function cancelApplicantTimeSlot(applicantId: string, panelId: string): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('applicant_time_slot')
+    .delete()
+    .eq('applicant_id', applicantId)
+    .eq('panel_id', panelId);
+  if (error) throw error;
+  return true;
+}
+
+export async function updateApplicationDeadline(deadlineName: string, newDeadline: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('application_settings')
+    .update({ deadline: newDeadline, updated_at: new Date().toISOString() })
+    .eq('deadline_name', deadlineName);
+  console.log("abc")
+  if (error) throw error;
+  return true;
+}
