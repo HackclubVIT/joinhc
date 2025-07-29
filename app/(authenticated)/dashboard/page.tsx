@@ -33,9 +33,18 @@ import {
   getMeetLinkByPanelId,
   getOverallApplicationStatus,
   getPreferenceSelectionInfo,
+  getApplicationDeadline,
+  getAvailableTimeSlotsForPanel,
+  getApplicantTimeSlot,
+  bookApplicantTimeSlot,
+  cancelApplicantTimeSlot,
+  getPanelByDepartment,
 } from "@/lib/supabase/data-fetching";
 import { createClient } from "@/lib/supabase/client";
 import { HackClubLogo } from "@/components/hackclub-logo";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { format } from "date-fns";
 
 export default function ApplicantDashboard() {
   const [application, setApplication] = useState<any>(null);
@@ -50,8 +59,63 @@ export default function ApplicantDashboard() {
     second: string | null;
   }>({ first: null, second: null });
 
+  type Pref = 'first' | 'second';
+  type SlotState = { slots: any[]; booking: any; panel: any; meetLink: string | null };
+  const [slotData, setSlotData] = useState<Record<Pref, SlotState>>({
+    first: { slots: [], booking: null, panel: null, meetLink: null },
+    second: { slots: [], booking: null, panel: null, meetLink: null },
+  });
+  const [slotLoading, setSlotLoading] = useState<Record<Pref, boolean>>({ first: false, second: false });
+  const [slotError, setSlotError] = useState<Record<Pref, string | null>>({ first: null, second: null });
+  const [showMeetDialog, setShowMeetDialog] = useState(false);
+  const [meetDialogMsg, setMeetDialogMsg] = useState("");
+  
+  const [openSlotModal, setOpenSlotModal] = useState<Pref | null>(null);
+
   const supabase = createClient();
 
+  const toIST = (date: string | Date) => {
+    return new Date(
+      new Date(date).toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+    );
+  };
+  const fetchSlotData = async (pref: Pref) => {
+    setSlotLoading((l) => ({ ...l, [pref]: true }));
+    setSlotError((e) => ({ ...e, [pref]: null }));
+    try {
+      const app = await getApplicationForUser();
+      const panelId =
+        pref === "first"
+          ? app.first_pref_panel_id
+          : app.second_pref_panel_id;
+      const status =
+        pref === "first"
+          ? app.first_pref_status
+          : app.second_pref_status;
+      if (!panelId || status !== "shortlisted") {
+        setSlotData((d) => ({ ...d, [pref]: { slots: [], booking: null, panel: null, meetLink: null } }));
+        setSlotLoading((l) => ({ ...l, [pref]: false }));
+        return;
+      }
+      const slots = await getAvailableTimeSlotsForPanel(panelId);
+      const booking = await getApplicantTimeSlot(app.applicant_id, panelId);
+      const panelArr = await getPanelByDepartment(app[`${pref}_pref_dept_id`]);
+      const panel = panelArr.find((p) => p.id === panelId);
+      setSlotData((d) => ({
+        ...d,
+        [pref]: {
+          slots,
+          booking,
+          panel,
+          meetLink: panel?.meet_link || null,
+        },
+      }));
+    } catch (e) {
+      setSlotError((err) => ({ ...err, [pref]: "Failed to load slots" }));
+    } finally {
+      setSlotLoading((l) => ({ ...l, [pref]: false }));
+    }
+  };
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -63,16 +127,16 @@ export default function ApplicantDashboard() {
           return;
         }
 
-        const [applicationData, settingsData, departments] = await Promise.all([
+        const [applicationData, applicationDeadline, departments] = await Promise.all([
           getApplicationForUser(),
-          getApplicationSettings(),
+          getApplicationDeadline(),
           getDepartments(),
         ]);
 
         if (applicationData) {
           setApplication(applicationData);
 
-          // Get department names from the joined data
+          
           const firstDeptName =
             applicationData.first_dept?.name || "Unknown Department";
           const secondDeptName =
@@ -83,7 +147,7 @@ export default function ApplicantDashboard() {
             second: secondDeptName,
           });
 
-          // get Meetlinks
+          
           const [first, second] = await Promise.all([
             getMeetLinkByPanelId(applicationData.first_pref_panel_id),
             getMeetLinkByPanelId(applicationData.second_pref_panel_id),
@@ -92,8 +156,8 @@ export default function ApplicantDashboard() {
           setMeetLinks({ first, second });
         }
 
-        if (settingsData?.deadline) {
-          setDeadline(new Date(settingsData.deadline));
+        if (applicationDeadline?.deadline) {
+          setDeadline(new Date(applicationDeadline.deadline));
         }
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -103,6 +167,8 @@ export default function ApplicantDashboard() {
     };
 
     fetchData();
+    fetchSlotData('first');
+    fetchSlotData('second');
   }, []);
 
   const today = new Date();
@@ -147,7 +213,7 @@ export default function ApplicantDashboard() {
       application.first_pref_status === "accepted" &&
       application.second_pref_status === "accepted";
 
-    // Check if both preferences are shortlisted
+    
     const bothShortlisted =
       application.first_pref_status === "shortlisted" &&
       application.second_pref_status === "shortlisted";
@@ -220,19 +286,33 @@ export default function ApplicantDashboard() {
     ? getOverallApplicationStatus(application)
     : "pending";
 
+  const canShowMeetLink = (slot: any) => {
+    if (!slot) return false;
+    const now = toIST(new Date());
+    const start = toIST(slot.start_time);
+    const end = toIST(slot.end_time);
+    return now >= new Date(start.getTime() - 10 * 60 * 1000) && now <= end;
+  };
+  const formatIST = (date: string | Date | null | undefined) => {
+    if (!date) return "—";
+    const d = toIST(date);
+    if (isNaN(d.getTime())) return "—";
+    return format(d, "yyyy-MM-dd HH:mm");
+  };
+
   return (
-    <div className="min-h-screen hackclub-bg page-transition">
-      <div className="content-container py-8 sm:py-12">
+    <div className="min-h-screen hackclub-bg page-transition overflow-x-hidden">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12">
         {/* Enhanced Hero Section */}
-        <div className="mb-12 text-center px-4 relative">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 border border-primary/30 mb-6">
-            <Award className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary">
+        <div className="mb-6 sm:mb-8 md:mb-12 text-center relative">
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-primary/20 border border-primary/30 mb-4 sm:mb-6">
+            <Award className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+            <span className="text-xs sm:text-sm font-medium text-primary">
               Welcome Back, Developer!
             </span>
           </div>
 
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-4 sm:mb-6">
             <div className="relative floating-element">
               <div className="absolute inset-0 blur-2xl opacity-30">
                 <HackClubLogo size="lg" showText={false} />
@@ -245,36 +325,36 @@ export default function ApplicantDashboard() {
             </div>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl font-black mb-4 text-foreground">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black mb-3 sm:mb-4 text-foreground">
             Your <span className="gradient-text">Journey</span> Continues 🚀
           </h1>
-          <p className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 max-w-2xl mx-auto">
             Track your progress, manage applications, and stay updated with your
             recruitment journey.
           </p>
 
           {/* Enhanced Quick Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4 max-w-4xl mx-auto">
             <div className="stats-card group">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-2xl font-black gradient-text">
+                <div className="text-xl sm:text-2xl font-black gradient-text">
                   {applicationSubmitted ? "✓" : "○"}
                 </div>
                 <div
-                  className={`p-2 rounded-xl ${
+                  className={`p-1.5 sm:p-2 rounded-xl ${
                     applicationSubmitted
                       ? "bg-green-500/20"
                       : "bg-yellow-500/20"
                   }`}
                 >
                   {applicationSubmitted ? (
-                    <CheckCircle className="h-4 w-4 text-green-400" />
+                    <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
                   ) : (
-                    <Clock className="h-4 w-4 text-yellow-400" />
+                    <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400" />
                   )}
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground font-medium">
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                 Application
               </p>
               <p className="text-xs text-muted-foreground">
@@ -284,7 +364,7 @@ export default function ApplicantDashboard() {
 
             <div className="stats-card">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-2xl font-black gradient-text-accent">
+                <div className="text-xl sm:text-2xl font-black gradient-text-accent">
                   {deadline
                     ? Math.max(
                         0,
@@ -295,11 +375,11 @@ export default function ApplicantDashboard() {
                       )
                     : "—"}
                 </div>
-                <div className="p-2 rounded-xl bg-blue-500/20">
-                  <Calendar className="h-4 w-4 text-blue-400" />
+                <div className="p-1.5 sm:p-2 rounded-xl bg-blue-500/20">
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground font-medium">
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                 Days Left
               </p>
               <p className="text-xs text-muted-foreground">Until deadline</p>
@@ -307,14 +387,14 @@ export default function ApplicantDashboard() {
 
             <div className="stats-card">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-2xl font-black gradient-text-secondary">
+                <div className="text-xl sm:text-2xl font-black gradient-text-secondary">
                   {applicationSubmitted ? "100%" : "0%"}
                 </div>
-                <div className="p-2 rounded-xl bg-purple-500/20">
-                  <TrendingUp className="h-4 w-4 text-purple-400" />
+                <div className="p-1.5 sm:p-2 rounded-xl bg-purple-500/20">
+                  <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400" />
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground font-medium">
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                 Progress
               </p>
               <p className="text-xs text-muted-foreground">Completion rate</p>
@@ -322,7 +402,7 @@ export default function ApplicantDashboard() {
 
             <div className="stats-card">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-2xl font-black gradient-text">
+                <div className="text-xl sm:text-2xl font-black gradient-text">
                   {overallStatus === "shortlisted" ||
                   overallStatus === "accepted"
                     ? "🎉"
@@ -330,11 +410,11 @@ export default function ApplicantDashboard() {
                     ? "⏳"
                     : "📝"}
                 </div>
-                <div className="p-2 rounded-xl bg-orange-500/20">
-                  <Target className="h-4 w-4 text-orange-400" />
+                <div className="p-1.5 sm:p-2 rounded-xl bg-orange-500/20">
+                  <Target className="h-3 w-3 sm:h-4 sm:w-4 text-orange-400" />
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground font-medium">
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                 Status
               </p>
               <p className="text-xs text-muted-foreground capitalize">
@@ -345,28 +425,28 @@ export default function ApplicantDashboard() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid gap-8 lg:grid-cols-3 px-4">
+        <div className="grid gap-6 sm:gap-8 lg:grid-cols-3 px-4">
           {/* Left Column - Primary Cards */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-6 sm:space-y-8">
             {/* Enhanced Application Status Card */}
-            <div className="neo-card overflow-hidden card-stack">
-              <div className="bg-gradient-to-r from-primary/20 to-primary/10 p-6 border-b border-border/50">
-                <div className="flex items-center justify-between">
+            <div className="neo-card overflow-hidden !p-0 card-stack">
+              <div className="bg-gradient-to-r from-primary/20 to-primary/10 p-4 sm:p-6 border-b border-border/50">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
-                    <h3 className="text-xl font-bold mb-2">
+                    <h3 className="text-lg sm:text-xl font-bold mb-2">
                       Application Status
                     </h3>
-                    <p className="text-muted-foreground">
+                    <p className="text-sm sm:text-base text-muted-foreground">
                       Track your recruitment progress
                     </p>
                   </div>
-                  <div className="p-3 rounded-2xl bg-primary/20 border border-primary/30">
-                    <FileText className="h-6 w-6 text-primary" />
+                  <div className="p-3 rounded-2xl bg-primary/20 border border-primary/30 self-start sm:self-auto">
+                    <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                   </div>
                 </div>
               </div>
 
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 {isLoading ? (
                   <div className="space-y-4">
                     <div className="loading-shimmer h-8 w-32 rounded"></div>
@@ -375,9 +455,9 @@ export default function ApplicantDashboard() {
                   </div>
                 ) : applicationSubmitted ? (
                   <div className="space-y-6">
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                       <div
-                        className={`p-3 rounded-2xl ${
+                        className={`p-3 rounded-2xl self-start ${
                           overallStatus === "shortlisted" ||
                           overallStatus === "accepted"
                             ? "bg-green-500/20 border border-green-500/30"
@@ -390,8 +470,8 @@ export default function ApplicantDashboard() {
                       >
                         {getStatusIcon(overallStatus)}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                           <Badge
                             className={`px-3 py-1 rounded-full ${
                               overallStatus === "shortlisted" ||
@@ -408,7 +488,7 @@ export default function ApplicantDashboard() {
                               overallStatus.slice(1)}
                           </Badge>
                           {overallStatus === "accepted" && (
-                            <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0">
+                            <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 text-xs sm:text-sm">
                               {application.first_pref_status === "accepted" &&
                               application.second_pref_status === "accepted"
                                 ? "Both Departments!"
@@ -435,7 +515,7 @@ export default function ApplicantDashboard() {
                           Submitted:{" "}
                           {new Date(
                             application.created_at
-                          ).toLocaleDateString()}
+                          ).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                         </p>
                       </div>
                     </div>
@@ -517,7 +597,7 @@ export default function ApplicantDashboard() {
                   <Link href="/application" className="w-full">
                     <Button
                       variant="outline"
-                      className="w-full h-12 border-2 border-primary/30 hover:bg-primary/10"
+                      className="w-full h-10 sm:h-12 border-2 border-primary/30 hover:bg-primary/10 text-sm sm:text-base"
                     >
                       <Zap className="mr-2 h-4 w-4" />
                       Edit Application
@@ -530,17 +610,17 @@ export default function ApplicantDashboard() {
             {/* Enhanced Department Preferences */}
             <div className="neo-card card-stack">
               <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
-                    <CardTitle className="text-2xl font-bold">
+                    <CardTitle className="text-xl sm:text-2xl font-bold">
                       Department Preferences
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-sm sm:text-base">
                       Your selected departments and their status
                     </CardDescription>
                   </div>
-                  <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30">
-                    <TrendingUp className="h-6 w-6 text-blue-400" />
+                  <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 self-start sm:self-auto">
+                    <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-blue-400" />
                   </div>
                 </div>
               </CardHeader>
@@ -556,135 +636,334 @@ export default function ApplicantDashboard() {
                     {/* Department Preferences Card with individual status indicators */}
                     <div className="space-y-4">
                       <div
-                        className={`p-6 rounded-xl border-l-4 ${
-                          application.second_pref_status === "accepted"
-                            ? "bg-green-500 bg-opacity-50"
-                            : application.first_pref_status === "shortlisted"
-                            ? "bg-gradient-to-r from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-500"
-                            : application.first_pref_status === "waitlisted"
-                            ? "bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-500"
+                        className={`p-4 sm:p-6 rounded-xl border-l-4 ${
+                          application.first_pref_status === "accepted"
+                            ? "bg-green-900/30 border-green-500"
                             : application.first_pref_status === "rejected"
-                            ? "bg-gradient-to-r from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-500"
-                            : "bg-gradient-to-r from-primary/10 to-primary/5 border-primary"
+                            ? "bg-red-900/30 border-red-500"
+                            : application.first_pref_status === "shortlisted"
+                            ? "bg-blue-900/30 border-blue-500"
+                            : application.first_pref_status === "waitlisted"
+                            ? "bg-yellow-900/30 border-yellow-500"
+                            : "bg-gray-800/50 border-gray-500"
                         }`}
                       >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm font-medium text-primary">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 mb-2">
+                          <span className={`text-sm font-medium ${
+                            application.first_pref_status === "accepted"
+                              ? "text-green-400"
+                              : application.first_pref_status === "rejected"
+                              ? "text-red-400"
+                              : application.first_pref_status === "shortlisted"
+                              ? "text-blue-400"
+                              : application.first_pref_status === "waitlisted"
+                              ? "text-yellow-400"
+                              : "text-gray-400"
+                          }`}>
                             First Preference
                           </span>
-                          <div className="flex items-center gap-2">
-                            <Badge className="bg-primary text-white">1st</Badge>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className={`text-white text-xs sm:text-sm ${
+                              application.first_pref_status === "accepted"
+                                ? "bg-green-600"
+                                : application.first_pref_status === "rejected"
+                                ? "bg-red-600"
+                                : application.first_pref_status === "shortlisted"
+                                ? "bg-blue-600"
+                                : application.first_pref_status === "waitlisted"
+                                ? "bg-yellow-600"
+                                : "bg-gray-600"
+                            }`}>1st</Badge>
                             {application.first_pref_status === "accepted" && (
-                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
                                 ✓ Accepted
                               </Badge>
                             )}
                             {application.first_pref_status ===
                               "shortlisted" && (
-                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
                                 ✓ Shortlisted
                               </Badge>
                             )}
                             {application.first_pref_status === "waitlisted" && (
-                              <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                              <Badge className="bg-blue-500 text-white text-xs sm:text-sm">
                                 Waitlisted
                               </Badge>
                             )}
                             {application.first_pref_status === "rejected" && (
-                              <Badge variant="destructive">Rejected</Badge>
+                              <Badge className="bg-red-500 text-white text-xs sm:text-sm">Rejected</Badge>
                             )}
                           </div>
                         </div>
-                        <p className="text-lg font-semibold">
+                        <p className="text-base sm:text-lg font-semibold">
                           {departmentNames.first}
                         </p>
-                        {application.first_pref_status === "shortlisted" &&
-                          meetLinks.first && (
-                            <a
-                              href={meetLinks.first}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                        {application.first_pref_status === "shortlisted" && (
+                          <div className="mt-4">
+                            {/* Debug info for troubleshooting Join Meet button */}
+                            {slotData.first.booking && (
+                              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
+                                <div>Current IST: {formatIST(new Date())}</div>
+                                <div>Slot start: {formatIST(slotData.first.booking.start_time)}</div>
+                                <div>Slot end: {formatIST(slotData.first.booking.end_time)}</div>
+                              </div>
+                            )}
+                            {/* Join Meet button outside modal */}
+                            {slotData.first.booking && canShowMeetLink(slotData.first.booking) && (
+                              <div className="mb-2">
+                                <a href={slotData.first.meetLink || ''} target="_blank" rel="noopener noreferrer">
+                                <Button size="sm" variant="outline" className="flex items-center gap-2 border-red-700 border-2 w-full sm:w-auto text-xs sm:text-sm">
+                                    <Video className="h-4 w-4" />
+                                    Join Meet
+                                  </Button>
+                                </a>
+                              </div>
+                            )}
+                            <Button
+                              variant="outline"
+                              onClick={() => setOpenSlotModal('first')}
+                                className="mb-2 w-full sm:w-auto text-sm sm:text-base"
                             >
+                              Book/Manage Slot
+                            </Button>
+                            <Dialog open={openSlotModal === 'first'} onOpenChange={(open) => setOpenSlotModal(open ? 'first' : null)}>
+                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
+                                <DialogHeader>
+                                  <DialogTitle>First Preference Slot Booking</DialogTitle>
+                                </DialogHeader>
+                                {slotLoading.first ? (
+                                  <div>Loading slots...</div>
+                                ) : slotError.first ? (
+                                  <div className="text-red-500">{slotError.first}</div>
+                                ) : slotData.first.booking ? (
+                                  <div className="space-y-2">
+                                    <div>
+                                      <b>Your booked slot:</b> {formatIST(slotData.first.booking.start_time)} to {formatIST(slotData.first.booking.end_time)} IST
+                                    </div>
+                                    <div className="flex gap-2 mt-2">
                               <Button
-                                size="sm"
                                 variant="outline"
-                                className="flex items-center gap-2 border-red-700 border-2"
+                                        onClick={async () => {
+                                          await cancelApplicantTimeSlot(application.applicant_id, slotData.first.booking.panel_id);
+                                          fetchSlotData('first');
+                                        }}
+                                          className="w-full sm:w-auto text-sm"
                               >
-                                <Video className="h-4 w-4" />
-                                Join Meet
+                                        Cancel Booking
                               </Button>
-                            </a>
-                          )}
-                        {application.first_pref_status === "shortlisted" &&
-                          application.second_pref_status === "shortlisted" && (
-                            <p className="text-sm text-green-600 dark:text-green-400 mt-1 font-medium">
-                              🎉 Congratulations! You're shortlisted for this
-                              department!
-                            </p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div className="mb-2">Select a slot:</div>
+                                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                      <Table className="min-w-full">
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead>Start</TableHead>
+                                            <TableHead>End</TableHead>
+                                            <TableHead>Action</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {slotData.first.slots.length === 0 ? (
+                                            <TableRow>
+                                              <TableCell colSpan={3}>No available slots.</TableCell>
+                                            </TableRow>
+                                          ) : (
+                                            slotData.first.slots.map((slot: any) => (
+                                              <TableRow key={slot.id}>
+                                                <TableCell>{formatIST(slot.start_time)}</TableCell>
+                                                <TableCell>{formatIST(slot.end_time)}</TableCell>
+                                                <TableCell>
+                                                  <Button
+                                                    size="sm"
+                                                    onClick={async () => {
+                                                      await bookApplicantTimeSlot(application.applicant_id, slotData.first.panel.id, slot.id);
+                                                      fetchSlotData('first');
+                                                    }}
+                                                  >
+                                                    Book
+                                                  </Button>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))
+                                          )}
+                                        </TableBody>
+                                      </Table>
+                                    </div>
+                                  </div>
+                                )}
+                              </DialogContent>
+                            </Dialog>
+                          </div>
                           )}
                       </div>
 
                       <div
-                        className={`p-6 rounded-xl border-l-4 ${
+                        className={`p-4 sm:p-6 rounded-xl border-l-4 ${
                           application.second_pref_status === "accepted"
-                            ? "bg-green-500 bg-opacity-50"
-                            : application.second_pref_status === "shortlisted"
-                            ? "bg-gradient-to-r from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-500"
-                            : application.second_pref_status === "waitlisted"
-                            ? "bg-gradient-to-r from-blue-50 to blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-500"
+                            ? "bg-green-900/30 border-green-500"
                             : application.second_pref_status === "rejected"
-                            ? "bg-gradient-to-r from-red-50 to red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-500"
-                            : "bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 border-gray-300 dark:border-gray-600"
+                            ? "bg-red-900/30 border-red-500"
+                            : application.second_pref_status === "shortlisted"
+                            ? "bg-blue-900/30 border-blue-500"
+                            : application.second_pref_status === "waitlisted"
+                            ? "bg-yellow-900/30 border-yellow-500"
+                            : "bg-gray-800/50 border-gray-500"
                         }`}
                       >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm font-medium">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 mb-2">
+                          <span className={`text-sm font-medium ${
+                            application.second_pref_status === "accepted"
+                              ? "text-green-400"
+                              : application.second_pref_status === "rejected"
+                              ? "text-red-400"
+                              : application.second_pref_status === "shortlisted"
+                              ? "text-blue-400"
+                              : application.second_pref_status === "waitlisted"
+                              ? "text-yellow-400"
+                              : "text-gray-400"
+                          }`}>
                             Second Preference
                           </span>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">2nd</Badge>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className={`text-white text-xs sm:text-sm ${
+                              application.second_pref_status === "accepted"
+                                ? "bg-green-600"
+                                : application.second_pref_status === "rejected"
+                                ? "bg-red-600"
+                                : application.second_pref_status === "shortlisted"
+                                ? "bg-blue-600"
+                                : application.second_pref_status === "waitlisted"
+                                ? "bg-yellow-600"
+                                : "bg-gray-600"
+                            }`}>2nd</Badge>
                             {application.second_pref_status === "accepted" && (
-                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
                                 ✓ Accepted
                               </Badge>
                             )}
                             {application.second_pref_status ===
                               "shortlisted" && (
-                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
                                 ✓ Shortlisted
                               </Badge>
                             )}
                             {application.second_pref_status ===
                               "waitlisted" && (
-                              <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                              <Badge className="bg-blue-500 text-white text-xs sm:text-sm">
                                 Waitlisted
                               </Badge>
                             )}
                             {application.second_pref_status === "rejected" && (
-                              <Badge variant="destructive">Rejected</Badge>
+                              <Badge className="bg-red-500 text-white text-xs sm:text-sm">Rejected</Badge>
                             )}
                           </div>
                         </div>
-                        <div className="flex justify-between">
-                          <p className="text-lg font-semibold">
+                        <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-0">
+                          <p className="text-base sm:text-lg font-semibold">
                             {departmentNames.second}
                           </p>
-                          {application.second_pref_status === "shortlisted" &&
-                            meetLinks.second && (
-                              <a
-                                href={meetLinks.second}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                          {application.second_pref_status === "shortlisted" && (
+                            <div className="mt-4">
+                              {/* Debug info for troubleshooting Join Meet button */}
+                              {slotData.second.booking && (
+                                <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
+                                  <div>Current IST: {formatIST(new Date())}</div>
+                                  <div>Slot start: {formatIST(slotData.second.booking.start_time)}</div>
+                                  <div>Slot end: {formatIST(slotData.second.booking.end_time)}</div>
+                                </div>
+                              )}
+                              {/* Join Meet button outside modal */}
+                              {slotData.second.booking && canShowMeetLink(slotData.second.booking) && (
+                                <div className="mb-2">
+                                  <a href={slotData.second.meetLink || ''} target="_blank" rel="noopener noreferrer">
+                                <Button size="sm" variant="outline" className="flex items-center gap-2 border-red-700 border-2 w-full sm:w-auto text-xs sm:text-sm">
+                                      <Video className="h-4 w-4" />
+                                      Join Meet
+                                    </Button>
+                                  </a>
+                                </div>
+                              )}
+                              <Button
+                                variant="outline"
+                                onClick={() => setOpenSlotModal('second')}
+                                className="mb-2 w-full sm:w-auto text-sm sm:text-base"
                               >
+                                Book/Manage Slot
+                              </Button>
+                              <Dialog open={openSlotModal === 'second'} onOpenChange={(open) => setOpenSlotModal(open ? 'second' : null)}>
+                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
+                                  <DialogHeader>
+                                    <DialogTitle>Second Preference Slot Booking</DialogTitle>
+                                  </DialogHeader>
+                                  {slotLoading.second ? (
+                                    <div>Loading slots...</div>
+                                  ) : slotError.second ? (
+                                    <div className="text-red-500">{slotError.second}</div>
+                                  ) : slotData.second.booking ? (
+                                    <div className="space-y-2">
+                                      <div>
+                                        <b>Your booked slot:</b> {formatIST(slotData.second.booking.start_time)} to {formatIST(slotData.second.booking.end_time)} IST
+                                      </div>
+                                      <div className="flex gap-2 mt-2">
                                 <Button
-                                  size="sm"
                                   variant="outline"
-                                  className="flex items-center gap-2 border-red-700 border-2"
+                                          onClick={async () => {
+                                            await cancelApplicantTimeSlot(application.applicant_id, slotData.second.booking.panel_id);
+                                            fetchSlotData('second');
+                                          }}
+                                          className="w-full sm:w-auto text-sm"
                                 >
-                                  <Video className="h-4 w-4" />
-                                  Join Meet
+                                          Cancel Booking
                                 </Button>
-                              </a>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <div className="mb-2">Select a slot:</div>
+                                      <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                        <Table className="min-w-full">
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Start</TableHead>
+                                              <TableHead>End</TableHead>
+                                              <TableHead>Action</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {slotData.second.slots.length === 0 ? (
+                                              <TableRow>
+                                                <TableCell colSpan={3}>No available slots.</TableCell>
+                                              </TableRow>
+                                            ) : (
+                                              slotData.second.slots.map((slot: any) => (
+                                                <TableRow key={slot.id}>
+                                                  <TableCell>{formatIST(slot.start_time)}</TableCell>
+                                                  <TableCell>{formatIST(slot.end_time)}</TableCell>
+                                                  <TableCell>
+                                                    <Button
+                                                      size="sm"
+                                                      onClick={async () => {
+                                                        await bookApplicantTimeSlot(application.applicant_id, slotData.second.panel.id, slot.id);
+                                                        fetchSlotData('second');
+                                                      }}
+                                                    >
+                                                      Book
+                                                    </Button>
+                                                  </TableCell>
+                                                </TableRow>
+                                              ))
+                                            )}
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+                                    </div>
+                                  )}
+                                </DialogContent>
+                              </Dialog>
+                            </div>
                             )}
                         </div>
                         {application.first_pref_status === "shortlisted" &&
@@ -715,45 +994,45 @@ export default function ApplicantDashboard() {
           </div>
 
           {/* Enhanced Right Column */}
-          <div className="space-y-6">
+          <div className="space-y-6 lg:space-y-8">
             {/* Important Dates Card */}
             <div className="hackclub-card">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-semibold">
+                  <CardTitle className="text-lg sm:text-xl font-semibold">
                     Important Dates
                   </CardTitle>
-                  <Calendar className="h-5 w-5 text-primary" />
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-4">
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
-                    <div>
-                      <p className="font-medium text-red-800 dark:text-red-200">
+                  <div className="flex justify-between items-center p-3 sm:p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-red-800 dark:text-red-200 text-sm sm:text-base">
                         Application Deadline
                       </p>
-                      <p className="text-sm text-red-600 dark:text-red-400">
+                      <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">
                         {deadline
-                          ? deadline.toLocaleDateString()
+                          ? deadline.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
                           : "Loading..."}
                       </p>
                     </div>
-                    <Bell className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    <Bell className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 ml-2" />
                   </div>
 
-                  <div className="flex justify-between items-center p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
+                  <div className="flex justify-between items-center p-3 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
                     <div>
-                      <p className="font-medium">Results Announcement</p>
-                      <p className="text-sm text-muted-foreground">TBA</p>
+                      <p className="font-medium text-sm sm:text-base">Results Announcement</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">TBA</p>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
+                  <div className="flex justify-between items-center p-3 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
                     <div>
-                      <p className="font-medium">Orientation</p>
-                      <p className="text-sm text-muted-foreground">TBA</p>
+                      <p className="font-medium text-sm sm:text-base">Orientation</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">TBA</p>
                     </div>
                   </div>
                 </div>
@@ -763,7 +1042,7 @@ export default function ApplicantDashboard() {
             {/* Quick Actions Card */}
             <div className="hackclub-card">
               <CardHeader>
-                <CardTitle className="text-xl font-semibold">
+                <CardTitle className="text-lg sm:text-xl font-semibold">
                   Quick Actions
                 </CardTitle>
               </CardHeader>
@@ -772,9 +1051,9 @@ export default function ApplicantDashboard() {
                 <Link href="/application" className="block">
                   <Button
                     variant="outline"
-                    className="w-full justify-start h-12 text-base border-2 hover:bg-primary/5"
+                    className="w-full justify-start h-10 sm:h-12 text-sm sm:text-base border-2 hover:bg-primary/5"
                   >
-                    <FileText className="mr-3 h-5 w-5" />
+                    <FileText className="mr-3 h-4 w-4 sm:h-5 sm:w-5" />
                     {applicationSubmitted
                       ? "View Application"
                       : "Start Application"}
@@ -784,65 +1063,25 @@ export default function ApplicantDashboard() {
                 <Link href="/profile" className="block">
                   <Button
                     variant="outline"
-                    className="w-full justify-start h-12 text-base border-2 hover:bg-primary/5"
+                    className="w-full justify-start h-10 sm:h-12 text-sm sm:text-base border-2 hover:bg-primary/5"
                   >
-                    <User className="mr-3 h-5 w-5" />
+                    <User className="mr-3 h-4 w-4 sm:h-5 sm:w-5" />
                     Update Profile
                   </Button>
                 </Link>
               </CardContent>
             </div>
-
-            {/* Progress Tracker */}
-            <div className="hackclub-card bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold text-primary">
-                  Application Journey
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`h-4 w-4 rounded-full border-2 ${
-                        applicationSubmitted
-                          ? "bg-green-500 border-green-500"
-                          : "border-gray-300"
-                      } flex items-center justify-center`}
-                    >
-                      {applicationSubmitted && (
-                        <div className="h-2 w-2 bg-white rounded-full" />
-                      )}
-                    </div>
-                    <span
-                      className={`text-sm font-medium ${
-                        applicationSubmitted
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-gray-500"
-                      }`}
-                    >
-                      Application Submitted
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
-                    <span className="text-sm text-gray-500">Under Review</span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
-                    <span className="text-sm text-gray-500">
-                      Final Decision
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </div>
           </div>
         </div>
       </div>
+      <Dialog open={showMeetDialog} onOpenChange={setShowMeetDialog}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Meet Link Unavailable</DialogTitle>
+          </DialogHeader>
+          <div>{meetDialogMsg}</div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

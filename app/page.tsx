@@ -17,36 +17,28 @@ import { HackClubLogo } from "@/components/hackclub-logo";
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col modern-bg page-transition">
-      <header className="nav-glass sticky top-0 z-50">
+      <div className="sticky top-0 z-50">
         <div className="content-container h-20">
           <div className="flex h-full items-center justify-between">
-            <HackClubLogo size="lg" href="/" />
-            <div className="flex items-center gap-4">
+            <HackClubLogo size="lg" href="/" className="pt-10" />
+            <div className="flex items-center gap-4 pt-8">
               <Link href="/login">
-                <Button
-                  variant="ghost"
-                  className="font-medium text-foreground hover:text-primary transition-all duration-300 rounded-xl px-6"
-                >
-                  Login
+                <Button className="premium-button">
+                  SignIn <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-              </Link>
-              <Link href="/register">
-                <button className="premium-button">
-                  Get Started <ArrowRight className="ml-2 h-4 w-4" />
-                </button>
               </Link>
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="flex-1 relative">
         {/* Hero Section */}
-        <section className="py-20 sm:py-32 relative overflow-hidden">
+        <section className="py-20 sm:py-10 relative overflow-hidden">
           <div className="content-container text-center relative z-10">
             <div className="mx-auto max-w-6xl space-y-12 px-4">
               {/* Floating Logo */}
-              <div className="flex justify-center mb-12 floating-element">
+              <div className="flex justify-center mb-5 floating-element">
                 <div className="relative">
                   <div className="absolute inset-0 blur-3xl opacity-30">
                     <div className="w-32 h-32 rounded-full bg-gradient-to-r from-pink-500 via-red-500 to-orange-500"></div>
@@ -61,12 +53,6 @@ export default function Home() {
 
               {/* Hero Content */}
               <div className="space-y-8">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
-                  <Star className="h-4 w-4 text-yellow-400" />
-                  <span className="text-sm font-medium">
-                    Join 500+ Amazing Developers
-                  </span>
-                </div>
 
                 <h1 className="hero-title">
                   Build the{" "}

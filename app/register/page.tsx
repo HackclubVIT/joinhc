@@ -16,6 +16,9 @@ import {
   Hash,
   ChevronRight,
   CheckCircle,
+  Sparkles,
+  Zap,
+  User,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { HackClubLogo } from "@/components/hackclub-logo";
@@ -24,6 +27,8 @@ export default function RegisterPage() {
   const { signUp } = useAuth();
   const [regno, setregno] = useState("");
   const [email, setEmail] = useState("");
+  const [full_name, setFull_name] = useState("");
+  const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -35,6 +40,17 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    if (!emailDomain) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    if (emailDomain !== 'vitstudent.ac.in') {
+      setError("Only @vitstudent.ac.in emails are allowed for registration");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -49,7 +65,7 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const { data, error } = await signUp(email, password, regno);
+      const { data, error } = await signUp(email, password, regno, mobile, full_name);
 
       if (error) {
         if (error.message.includes("User already registered")) {
@@ -60,6 +76,8 @@ export default function RegisterPage() {
           setError("Please enter a valid email address.");
         } else if (error.message.includes("Password")) {
           setError("Password must be at least 6 characters long.");
+        } else if (error.message.includes("Only @vitstudent.ac.in")) {
+          setError("Only @vitstudent.ac.in emails are allowed for registration.");
         } else {
           setError(
             error.message || "Failed to create account. Please try again.",
@@ -73,7 +91,7 @@ export default function RegisterPage() {
             "Account created! Please check your email to verify your account before logging in.",
           );
         }
-
+        setMobile("");
         setEmail("");
         setPassword("");
         setConfirmPassword("");
@@ -100,60 +118,87 @@ export default function RegisterPage() {
   const passwordStrength = getPasswordStrength(password);
 
   return (
-    <div className="min-h-screen hackclub-bg flex">
-      {/* Left side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center items-center p-8 xl:p-12 bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm border-r border-border/50">
-        <div className="max-w-md text-center space-y-8">
-          <div>
+    <div className="min-h-screen modern-bg flex page-transition">
+      {/* Left side - Enhanced Branding */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center items-center p-8 xl:p-12 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-purple-500/10 to-cyan-500/20"></div>
+        <div className="relative z-10 max-w-md text-center space-y-8">
+          <div className="floating-element">
             <div className="flex justify-center mb-6">
-              <HackClubLogo size="xl" showText={false} />
+              <div className="relative">
+                <div className="absolute inset-0 blur-2xl opacity-40">
+                  <HackClubLogo size="xl" showText={false} />
+                </div>
+                <HackClubLogo
+                  size="xl"
+                  showText={false}
+                  className="relative z-10"
+                />
+              </div>
             </div>
-            <h1 className="text-5xl font-bold text-white mb-4">
-              HackClub <span className="text-primary">Recruitment</span>
+            <h1 className="text-5xl font-black text-foreground mb-4">
+              HackClub <span className="gradient-text">Portal</span>
             </h1>
-            <p className="text-xl text-gray-300 leading-relaxed">
-              Join our community of coders, makers, and creators building the
-              tech future
+            <p className="text-xl text-muted-foreground leading-relaxed">
+              Your gateway to an exclusive community of innovators and creators
             </p>
           </div>
 
-          {/* Progress Steps */}
-          <div className="flex items-center justify-center space-x-8 py-8">
-            <div className="flex flex-col items-center">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-semibold text-sm">
-                1
+          {/* Enhanced Progress Steps */}
+          <div className="flex items-center justify-center space-x-6 py-8">
+            <div className="flex flex-col items-center group">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-primary to-primary/80 flex items-center justify-center text-primary-foreground font-bold text-sm shadow-lg">
+                <Zap className="h-5 w-5" />
               </div>
-              <span className="text-sm text-white mt-2">Account</span>
+              <span className="text-sm text-foreground mt-2 font-medium">
+                Login
+              </span>
             </div>
-            <ChevronRight className="text-gray-500" size={20} />
-            <div className="flex flex-col items-center">
-              <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-gray-300 font-semibold text-sm">
+            <ChevronRight className="text-primary" size={24} />
+            <div className="flex flex-col items-center opacity-50">
+              <div className="w-12 h-12 rounded-2xl bg-secondary border border-border flex items-center justify-center text-muted-foreground font-bold text-sm">
                 2
               </div>
-              <span className="text-sm text-gray-400 mt-2">Application</span>
+              <span className="text-sm text-muted-foreground mt-2">
+                Dashboard
+              </span>
             </div>
-            <ChevronRight className="text-gray-500" size={20} />
-            <div className="flex flex-col items-center">
-              <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-gray-300 font-semibold text-sm">
+            <ChevronRight className="text-muted-foreground" size={20} />
+            <div className="flex flex-col items-center opacity-50">
+              <div className="w-12 h-12 rounded-2xl bg-secondary border border-border flex items-center justify-center text-muted-foreground font-bold text-sm">
                 3
               </div>
-              <span className="text-sm text-gray-400 mt-2">Submission</span>
+              <span className="text-sm text-muted-foreground mt-2">
+                Success
+              </span>
             </div>
           </div>
 
           {/* Benefits */}
           <div className="space-y-4 text-left">
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="text-primary" size={20} />
-              <span className="text-gray-300">Learn by Building</span>
+            <div className="flex items-center space-x-3 group">
+              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-green-400" />
+              </div>
+              <span className="text-foreground group-hover:text-primary transition-colors">
+                Secure Authentication
+              </span>
             </div>
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="text-primary" size={20} />
-              <span className="text-gray-300">Innovative Community</span>
+            <div className="flex items-center space-x-3 group">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-blue-400" />
+              </div>
+              <span className="text-foreground group-hover:text-primary transition-colors">
+                Instant Access
+              </span>
             </div>
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="text-primary" size={20} />
-              <span className="text-gray-300">Launch Your Ideas</span>
+            <div className="flex items-center space-x-3 group">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-purple-400" />
+              </div>
+              <span className="text-foreground group-hover:text-primary transition-colors">
+                Premium Features
+              </span>
             </div>
           </div>
         </div>
@@ -235,6 +280,48 @@ export default function RegisterPage() {
 
                 <div className="space-y-2">
                   <Label
+                    htmlFor="full_name"
+                    className="text-sm font-medium text-gray-200"
+                  >
+                    Full Name
+                  </Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="full_name"
+                      type="text"
+                      placeholder="John Doe"
+                      value={full_name}
+                      onChange={(e) => setFull_name(e.target.value)}
+                      className="pl-10 h-12 bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="email"
+                    className="text-sm font-medium text-gray-200"
+                  >
+                    Mobile Number
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="mobile"
+                      type="tel"
+                      placeholder="+91 XXX XXX XXXX"
+                      value={mobile}
+                      onChange={(e) => setMobile(e.target.value)}
+                      className="pl-10 h-12 bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label
                     htmlFor="email"
                     className="text-sm font-medium text-gray-200"
                   >
@@ -245,14 +332,36 @@ export default function RegisterPage() {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="yourname@email.com"
+                      placeholder="yourname@vitstudent.ac.in"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 h-12 bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                      className={`pl-10 h-12 bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20 ${
+                        email && email.includes('@') ? 
+                          (email.toLowerCase().endsWith('@vitstudent.ac.in') ? 'border-green-500 focus:border-green-500' : 
+                           'border-red-500 focus:border-red-500') : ''
+                      }`}
                       required
                       disabled={isLoading}
                     />
                   </div>
+                  {email && email.includes('@') && (
+                    <div className="flex items-center space-x-2 text-xs">
+                      {email.toLowerCase().endsWith('@vitstudent.ac.in') ? (
+                        <>
+                          <CheckCircle className="h-3 w-3 text-green-400" />
+                          <span className="text-green-400">Valid student email</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="h-3 w-3 rounded-full border-2 border-red-400" />
+                          <span className="text-red-400">Only @vitstudent.ac.in emails allowed</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400">
+                    Use your VIT student email address (@vitstudent.ac.in)
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -367,43 +476,6 @@ export default function RegisterPage() {
               </div>
             </form>
           </div>
-
-          {/* Or continue with Google */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-gray-600" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-gray-900 px-2 text-gray-400">
-                Or continue with
-              </span>
-            </div>
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full h-12 border-gray-600 bg-gray-800/50 text-white hover:bg-gray-700/50 font-medium"
-          >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="currentColor"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            Sign up with Google
-          </Button>
 
           {/* Terms and Sign in link */}
           <div className="space-y-4 text-center">

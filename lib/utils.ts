@@ -7,29 +7,28 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatDate(date: Date | string | null): string {
   if (!date) return "N/A"
-  
   const d = typeof date === 'string' ? new Date(date) : date
   if (isNaN(d.getTime())) return "Invalid Date"
-  
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('en-IN', {
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
+    timeZone: 'Asia/Kolkata',
   })
 }
 
 export function formatDateTime(date: Date | string | null): string {
   if (!date) return "N/A"
-  
   const d = typeof date === 'string' ? new Date(date) : date
   if (isNaN(d.getTime())) return "Invalid Date"
-  
-  return d.toLocaleString('en-US', {
+  return d.toLocaleString('en-IN', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
+    hour12: true,
   })
 }
 

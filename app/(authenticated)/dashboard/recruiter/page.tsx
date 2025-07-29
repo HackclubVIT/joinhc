@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Users,
   FileText,
@@ -31,8 +32,10 @@ import {
   getDepartmentApplicants,
   getDepartmentNameById,
   getApplicationSettings,
-  isCurrentUserRecruiter,
-  getPanelsForRecruiter,
+  isCurrentUserRecruiterOrEvaluator,
+  getPanelsForUser,
+  getApplicationDeadline,
+  getShortlistDeadline,
 } from "@/lib/supabase/data-fetching";
 import { useAuth } from "@/contexts/auth-context";
 import { HackClubLogo } from "@/components/hackclub-logo";
@@ -70,23 +73,25 @@ export default function RecruiterDashboard() {
     totalRejected: 0,
   });
   const [deadline, setDeadline] = useState<Date | null>(null);
+  const [applicationDeadline, setApplicationDeadline] = useState<Date | null>(null);
+  const [shortlistDeadline, setShortlistDeadline] = useState<Date | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        if (!user || userRole !== "recruiter") {
+        if (!user) {
           setIsLoading(false);
           return;
         }
 
-        const isRecruiter = await isCurrentUserRecruiter();
-        if (!isRecruiter) {
+        const hasRole = await isCurrentUserRecruiterOrEvaluator();
+        if (!hasRole) {
           setIsLoading(false);
           return;
         }
 
         const [recruiterDepts, settingsData] = await Promise.all([
-          getRecruiterDepartments(),
+          getRecruiterDepartments(user.id),
           getApplicationSettings(),
         ]);
 
@@ -103,7 +108,7 @@ export default function RecruiterDashboard() {
           totalRejected: 0,
         };
 
-        setPanels(await getPanelsForRecruiter(recruiterDepts[0].recruiter_id));
+        setPanels(await getPanelsForUser(user.id));
         for (const dept of recruiterDepts) {
           if (dept.department_id) {
             const [applicants, deptName] = await Promise.all([
@@ -141,8 +146,26 @@ export default function RecruiterDashboard() {
       }
     };
 
+    const fetchDeadlines = async () => {
+      try {
+        const [appDL, shortDL] = await Promise.all([
+          getApplicationDeadline(),
+          getShortlistDeadline(),
+        ]);
+        setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
+        setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
+      } catch (err) {
+        setApplicationDeadline(null);
+        setShortlistDeadline(null);
+      }
+    };
+
     fetchData();
+    fetchDeadlines();
   }, [user, userRole]);
+
+  const now = new Date();
+  const canPanel = shortlistDeadline && now > shortlistDeadline;
 
   const calculateDepartmentStats = (
     applicants: any[],
@@ -200,8 +223,7 @@ export default function RecruiterDashboard() {
 
   const filteredDepartments = departments.filter(
     (dept) =>
-      dept.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      dept.role === "recruiter"
+      dept.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const exportAllApplications = async () => {
@@ -230,7 +252,7 @@ export default function RecruiterDashboard() {
             app.dept_second_pref || "",
             app.first_pref_status || "pending",
             app.second_pref_status || "pending",
-            new Date(app.created_at).toLocaleDateString(),
+            new Date(app.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
           ].join(",")
         ),
       ].join("\n");
@@ -268,34 +290,19 @@ export default function RecruiterDashboard() {
     );
   }
 
-  if (userRole !== "recruiter") {
-    return (
-      <div className="min-h-screen hackclub-bg flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground mb-4">
-            Access Denied
-          </h1>
-          <p className="text-muted-foreground">
-            You don't have permission to access this page.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen hackclub-bg page-transition">
-      <div className="content-container py-8 sm:py-12">
+    <div className="min-h-screen hackclub-bg page-transition overflow-x-hidden">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12">
         {/* Enhanced Header */}
-        <div className="mb-12 text-center px-4 relative">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 border border-primary/30 mb-6">
-            <Building2 className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary">
-              Recruiter Dashboard
+        <div className="mb-6 sm:mb-8 md:mb-12 text-center relative">
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-primary/20 border border-primary/30 mb-4 sm:mb-6">
+            <Building2 className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+            <span className="text-xs sm:text-sm font-medium text-primary">
+              Recruitment Dashboard
             </span>
           </div>
 
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-4 sm:mb-6">
             <div className="relative floating-element">
               <div className="absolute inset-0 blur-2xl opacity-30">
                 <HackClubLogo size="lg" showText={false} />
@@ -308,127 +315,130 @@ export default function RecruiterDashboard() {
             </div>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl font-black mb-4 text-foreground">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black mb-3 sm:mb-4 text-foreground">
             Recruitment <span className="gradient-text">Dashboard</span>
           </h1>
-          <p className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Manage applications, review candidates, and track recruitment
-            progress.
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 max-w-2xl mx-auto">
+            Manage applications, review candidates, and track recruitment progress.
+            <br />
+            <span className="text-xs sm:text-sm text-muted-foreground/80">
+              Access for Recruiters and Evaluators
+            </span>
           </p>
 
           {deadline && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/20 border border-amber-500/30">
-              <Calendar className="h-4 w-4 text-amber-400" />
-              <span className="text-sm font-medium text-amber-300">
-                Application Deadline: {deadline.toLocaleDateString()}
+            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-amber-500/20 border border-amber-500/30">
+              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-amber-400" />
+              <span className="text-xs sm:text-sm font-medium text-amber-300">
+                Application Deadline: {deadline.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
               </span>
             </div>
           )}
         </div>
 
         {/* Overall Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8 px-4">
-          <div className="stats-card">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-6 sm:mb-8">
+          <div className="stats-card min-w-0">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-2xl font-black gradient-text">
+              <div className="text-xl sm:text-2xl font-black gradient-text">
                 {totalStats.totalApplicants}
               </div>
-              <div className="p-2 rounded-xl bg-blue-500/20">
-                <Users className="h-4 w-4 text-blue-400" />
+              <div className="p-1.5 sm:p-2 rounded-xl bg-blue-500/20">
+                <Users className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
               </div>
             </div>
-            <p className="text-sm text-muted-foreground font-medium">
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
               Total Applications
             </p>
           </div>
 
-          <div className="stats-card">
+          <div className="stats-card min-w-0">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-2xl font-black gradient-text-accent">
+              <div className="text-xl sm:text-2xl font-black gradient-text-accent">
                 {totalStats.totalPending}
               </div>
-              <div className="p-2 rounded-xl bg-yellow-500/20">
-                <Clock className="h-4 w-4 text-yellow-400" />
+              <div className="p-1.5 sm:p-2 rounded-xl bg-yellow-500/20">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400" />
               </div>
             </div>
-            <p className="text-sm text-muted-foreground font-medium">
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
               Pending Review
             </p>
           </div>
 
-          <div className="stats-card">
+          <div className="stats-card min-w-0">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-2xl font-black text-green-600">
+              <div className="text-xl sm:text-2xl font-black text-green-600">
                 {totalStats.totalShortlisted}
               </div>
-              <div className="p-2 rounded-xl bg-green-500/20">
-                <CheckCircle className="h-4 w-4 text-green-400" />
+              <div className="p-1.5 sm:p-2 rounded-xl bg-green-500/20">
+                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
               </div>
             </div>
-            <p className="text-sm text-muted-foreground font-medium">
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
               Shortlisted
             </p>
           </div>
 
-          <div className="stats-card">
+          <div className="stats-card min-w-0">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-2xl font-black text-blue-600">
+              <div className="text-xl sm:text-2xl font-black text-blue-600">
                 {totalStats.totalWaitlisted}
               </div>
-              <div className="p-2 rounded-xl bg-blue-500/20">
-                <AlertTriangle className="h-4 w-4 text-blue-400" />
+              <div className="p-1.5 sm:p-2 rounded-xl bg-blue-500/20">
+                <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
               </div>
             </div>
-            <p className="text-sm text-muted-foreground font-medium">
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
               Waitlisted
             </p>
           </div>
 
-          <div className="stats-card">
+          <div className="stats-card min-w-0">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-2xl font-black text-red-600">
+              <div className="text-xl sm:text-2xl font-black text-red-600">
                 {totalStats.totalRejected}
               </div>
-              <div className="p-2 rounded-xl bg-red-500/20">
-                <AlertTriangle className="h-4 w-4 text-red-400" />
+              <div className="p-1.5 sm:p-2 rounded-xl bg-red-500/20">
+                <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
               </div>
             </div>
-            <p className="text-sm text-muted-foreground font-medium">
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
               Rejected
             </p>
           </div>
         </div>
 
-        <div className="px-4 space-y-8">
+        <div className="space-y-6 sm:space-y-8">
           {/* Departments Section */}
-          <Card className="neo-card card-stack">
+          <Card className=" card-stack">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl font-bold">
+                  <CardTitle className="text-xl sm:text-2xl font-bold">
                     Department Overview
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-sm sm:text-base">
                     Applications and statistics for your assigned departments
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Search departments..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 w-64"
+                      className="pl-10 w-full sm:w-64"
                     />
                   </div>
-                  <Button
+                  {/* <Button
                     onClick={exportAllApplications}
                     className="premium-button"
                   >
                     <Download className="mr-2 h-4 w-4" />
                     Export All
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
             </CardHeader>
@@ -447,34 +457,46 @@ export default function RecruiterDashboard() {
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {filteredDepartments.map((dept) => (
                     <Link
                       key={dept.id}
                       href={`/dashboard/recruiter/${dept.id}`}
                     >
-                      <Card className="neo-card transition-all duration-300 hover:scale-105 cursor-pointer group">
+                      <Card className=" transition-all duration-300 hover:scale-105 cursor-pointer group">
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 group-hover:scale-110 transition-transform duration-300">
-                                <Building2 className="h-5 w-5 text-primary" />
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              <div className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                                <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                               </div>
-                              <div>
-                                <CardTitle className="text-lg font-bold group-hover:text-primary transition-colors">
+                              <div className="min-w-0 flex-1">
+                                <CardTitle className="text-base sm:text-lg font-bold group-hover:text-primary transition-colors truncate">
                                   {dept.name}
                                 </CardTitle>
-                                <p className="text-sm text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs sm:text-sm text-muted-foreground">
                                   {dept.totalApplicants} applicants
                                 </p>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-xs ${
+                                      dept.role === 'recruiter' 
+                                        ? 'bg-green-100 text-green-800 border-green-200' 
+                                        : 'bg-orange-100 text-orange-800 border-orange-200'
+                                    }`}
+                                  >
+                                    {dept.role}
+                                  </Badge>
+                                </div>
                               </div>
                             </div>
-                            <BarChart3 className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
                           </div>
                         </CardHeader>
 
-                        <CardContent className="space-y-4">
-                          <div className="grid grid-cols-2 gap-3 text-sm">
+                        <CardContent className="space-y-3 sm:space-y-4">
+                          <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
                             <div className="flex items-center justify-between p-2 rounded-lg bg-primary/5">
                               <span className="text-muted-foreground">
                                 1st Choice
@@ -521,14 +543,15 @@ export default function RecruiterDashboard() {
           </Card>
 
           {/* Panels Section */}
-          <Card className="neo-card card-stack">
+          {canPanel && (
+          <Card className=" card-stack">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl font-bold">
+                  <CardTitle className="text-xl sm:text-2xl font-bold">
                     Panel Overview
                   </CardTitle>
-                  <CardDescription>Your assigned panels</CardDescription>
+                  <CardDescription className="text-sm sm:text-base">Your assigned panels</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -547,27 +570,28 @@ export default function RecruiterDashboard() {
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {panels.map((panel) => (
                     <Link
                       key={panel.id}
                       href={`/dashboard/recruiter/panel/${panel.id}`}
+                        className="block"
                     >
-                      <Card className="neo-card transition-all duration-300 hover:scale-105 cursor-pointer group">
+                        <Card className="transition-all duration-300 hover:scale-105 cursor-pointer group">
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 group-hover:scale-110 transition-transform duration-300">
-                                <Building2 className="h-5 w-5 text-primary" />
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              <div className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                                <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                               </div>
-                              <div>
-                                <CardTitle className="text-lg font-bold group-hover:text-primary transition-colors">
+                              <div className="min-w-0 flex-1">
+                                <CardTitle className="text-base sm:text-lg font-bold group-hover:text-primary transition-colors truncate">
                                   {panel.name}
                                 </CardTitle>
-                                <p className="text-sm text-muted-foreground h-1"></p>
+                                <p className="text-xs sm:text-sm text-muted-foreground h-1"></p>
                               </div>
                             </div>
-                            <BarChart3 className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
                           </div>
                         </CardHeader>
                       </Card>
@@ -577,6 +601,7 @@ export default function RecruiterDashboard() {
               )}
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </div>

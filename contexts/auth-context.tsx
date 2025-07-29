@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import type { Session, User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
 
-type UserRole = "applicant" | "recruiter"
+type UserRole = "applicant" | "recruiter" | "admin"
 
 type AuthContextType = {
   user: User | null
@@ -15,7 +15,7 @@ type AuthContextType = {
   userRole: UserRole | null
   refreshUserRole: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ error: any }>
-  signUp: (email: string, password: string, regno: string) => Promise<{ error: any; data: any }>
+  signUp: (email: string, password: string, regno: string, mobile: string, full_name: string) => Promise<{ error: any; data: any }>
   signOut: () => Promise<void>
 }
 
@@ -108,7 +108,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(session.user)
           if (event === 'SIGNED_IN' && !userRole) {
             const role = await fetchUserRole(session.user.id)
-            const redirectPath = role === "recruiter" ? "/dashboard/recruiter" : "/dashboard"
+            const redirectPath = role === "recruiter" ? "/dashboard/recruiter" : 
+                                role === "admin" ? "/admin" : "/dashboard"
             router.push(redirectPath)
           }
         } else {
@@ -138,16 +139,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const signUp = async (email: string, password: string, regno: string) => {
+  const signUp = async (email: string, password: string, regno: string, phone: string, full_name: string) => {
     try {
+      const emailDomain = email.split('@')[1]?.toLowerCase();
+      if (!emailDomain || emailDomain !== 'vitstudent.ac.in') {
+        return { 
+          data: null, 
+          error: { message: "Only @vitstudent.ac.in emails are allowed for registration" } 
+        };
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: email.split("@")[0],
+            full_name: full_name,
             role: "applicant",
-            register_no: regno
+            register_no: regno,
+            mobile: phone
           },
         },
       })
