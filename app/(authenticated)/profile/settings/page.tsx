@@ -130,7 +130,7 @@ export default function SettingsPage() {
       )}
 
       {/* Change Password Card */}
-      <Card className="hackclub-card overflow-hidden">
+      <Card className="hackclub-card !p-0 overflow-hidden">
         <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-primary/10">
@@ -255,7 +255,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Account Information Card */}
-      <Card className="hackclub-card overflow-hidden">
+      <Card className="hackclub-card !p-0 overflow-hidden">
         <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 p-6 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900">

@@ -168,8 +168,8 @@ export default function ProfilePage() {
             {userRole === "recruiter" ? (
               <>
                 {/* Recruiter Personal Information */}
-                <Card className="hackclub-card overflow-hidden">
-                  <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6 border-b border-border">
+                <Card className="hackclub-card !p-0 overflow-hidden">
+                  <div className=" bg-gradient-to-r from-primary/10 to-primary/5 p-6 border-b border-border">
                     <div className="flex items-center gap-3">
                       <div className="p-3 rounded-full bg-primary/10 border border-primary/20">
                         <User className="h-6 w-6 text-primary" />
@@ -233,7 +233,7 @@ export default function ProfilePage() {
                 </Card>
 
                 {/* Department Assignments */}
-                <Card className="hackclub-card overflow-hidden">
+                <Card className="hackclub-card !p-0 overflow-hidden">
                   <div className="bg-gradient-to-r from-blue-50/80 to-purple-50/80 dark:from-blue-950/20 dark:to-purple-950/20 p-6 border-b border-border">
                     <div className="flex items-center gap-3">
                       <div className="p-3 rounded-full bg-blue-100/80 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-800">
@@ -288,7 +288,7 @@ export default function ProfilePage() {
             ) : userRole === "applicant" ? (
               <>
                 {/* Applicant Personal Information */}
-                <Card className="hackclub-card overflow-hidden">
+                <Card className="hackclub-card !p-0 overflow-hidden">
                   <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6 border-b border-border">
                     <div className="flex items-center gap-3">
                       <div className="p-3 rounded-full bg-primary/10 border border-primary/20">
@@ -346,7 +346,7 @@ export default function ProfilePage() {
                 </Card>
 
                 {/* Application Summary */}
-                <Card className="hackclub-card overflow-hidden">
+                <Card className="hackclub-card !p-0 overflow-hidden">
                   <div className="bg-gradient-to-r from-green-50/80 to-blue-50/80 dark:from-green-950/20 dark:to-blue-950/20 p-6 border-b border-border">
                     <div className="flex items-center gap-3">
                       <div className="p-3 rounded-full bg-green-100/80 dark:bg-green-900/50 border border-green-200 dark:border-green-800">

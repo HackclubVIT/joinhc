@@ -278,20 +278,20 @@ export function AuthLayout({ children }: AuthLayoutProps) {
 
                     {/* Menu Items */}
                     <DropdownMenuItem asChild className="p-0 m-1">
-                      <Link href="/profile" className="flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 transition-all duration-300 cursor-pointer group">
+                      <Link href="/profile" className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/80 transition-all duration-300 cursor-pointer group">
                         <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
                           <User className="h-4 w-4 text-blue-400" />
                         </div>
-                        <span className="text-foreground group-hover:text-red-400 transition-colors">Profile</span>
+                        <span className="text-foreground group-hover:text-blue-400 transition-colors">Profile</span>
                       </Link>
                     </DropdownMenuItem>
 
                     <DropdownMenuItem asChild className="p-0 m-1">
-                      <Link href="/profile/settings" className="flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 transition-all duration-300 cursor-pointer group">
+                      <Link href="/profile/settings" className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/80 transition-all duration-300 cursor-pointer group">
                         <div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
                           <Settings className="h-4 w-4 text-purple-400" />
                         </div>
-                        <span className="text-foreground group-hover:text-red-400 transition-colors">Settings</span>
+                        <span className="text-foreground group-hover:text-purple-400 transition-colors">Settings</span>
                       </Link>
                     </DropdownMenuItem>
 
@@ -301,7 +301,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
                       onClick={() => signOut()}
                       className="p-0 m-1"
                     >
-                      <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/20 transition-all duration-300 cursor-pointer group w-full">
+                      <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 hover:border-red-500/20 border border-transparent transition-all duration-300 cursor-pointer group w-full">
                         <div className="h-8 w-8 rounded-lg bg-red-500/20 flex items-center justify-center group-hover:bg-red-500/30 transition-colors">
                           <LogOut className="h-4 w-4 text-red-400" />
                         </div>

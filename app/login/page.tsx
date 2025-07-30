@@ -140,34 +140,6 @@ function LoginContent() {
               </span>
             </div>
           </div>
-
-          {/* Benefits */}
-          <div className="space-y-3 sm:space-y-4 text-left">
-            <div className="flex items-center space-x-3 group">
-              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
-              </div>
-              <span className="text-sm sm:text-base text-foreground group-hover:text-primary transition-colors">
-                Secure Authentication
-              </span>
-            </div>
-            <div className="flex items-center space-x-3 group">
-              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
-              </div>
-              <span className="text-sm sm:text-base text-foreground group-hover:text-primary transition-colors">
-                Instant Access
-              </span>
-            </div>
-            <div className="flex items-center space-x-3 group">
-              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400" />
-              </div>
-              <span className="text-sm sm:text-base text-foreground group-hover:text-primary transition-colors">
-                Premium Features
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 
