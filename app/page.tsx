@@ -24,7 +24,7 @@ export default function Home() {
             <div className="flex items-center gap-4 pt-8">
               <Link href="/login">
                 <Button className="premium-button">
-                  SignIn <ArrowRight className="ml-2 h-4 w-4" />
+                  SignIn/SignUp <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
@@ -77,7 +77,7 @@ export default function Home() {
                   <button className="premium-button text-lg px-12 py-6 group">
                     <Sparkles className="mr-3 h-6 w-6 group-hover:rotate-12 transition-transform duration-300" />
                     Start Your Journey
-                    <ArrowRight className="ml-3 h-6 w-6 group-hover:translate-x-1 transition-transform duration-300" />
+                    {/* <ArrowRight className="ml-3 h-6 w-6 group-hover:translate-x-1 transition-transform duration-300" /> */}
                   </button>
                 </Link>
                 <Link href="/login">
@@ -222,7 +222,7 @@ export default function Home() {
                   <button className="premium-button text-xl px-16 py-8 group">
                     <Sparkles className="mr-4 h-6 w-6 group-hover:rotate-12 transition-transform duration-300" />
                     Start Your Journey
-                    <ArrowRight className="ml-4 h-6 w-6 group-hover:translate-x-1 transition-transform duration-300" />
+                    {/* <ArrowRight className="ml-4 h-6 w-6 group-hover:translate-x-1 transition-transform duration-300" />  */}
                   </button>
                 </Link>
               </div>
@@ -238,7 +238,7 @@ export default function Home() {
             <HackClubLogo size="md" />
             <div className="mt-4 md:mt-0">
               <p className="text-muted-foreground">
-                © 2024 HackClub. Crafted with{" "}
+                © HackClub. Crafted with{" "}
                 <span className="gradient-text">❤️</span> by the community.
               </p>
             </div>

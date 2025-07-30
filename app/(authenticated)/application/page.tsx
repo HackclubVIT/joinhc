@@ -506,7 +506,6 @@ export default function ApplicationPage() {
         </form>
       </div>
 
-      {/* Slot Booking Section */}
       <div className="px-4 mt-8">
         {(['first', 'second'] as Pref[]).map((pref) => {
           const prefLabel = pref === 'first' ? 'First' : 'Second';

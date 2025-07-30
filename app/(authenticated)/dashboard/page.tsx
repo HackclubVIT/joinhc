@@ -588,7 +588,7 @@ export default function ApplicantDashboard() {
                     >
                       {deadlinePassed
                         ? "Deadline Passed"
-                        : "Submit Application"}
+                        : "Start Application"}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </Link>

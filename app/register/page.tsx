@@ -173,34 +173,6 @@ export default function RegisterPage() {
               </span>
             </div>
           </div>
-
-          {/* Benefits */}
-          <div className="space-y-4 text-left">
-            <div className="flex items-center space-x-3 group">
-              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                <Sparkles className="h-4 w-4 text-green-400" />
-              </div>
-              <span className="text-foreground group-hover:text-primary transition-colors">
-                Secure Authentication
-              </span>
-            </div>
-            <div className="flex items-center space-x-3 group">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                <Sparkles className="h-4 w-4 text-blue-400" />
-              </div>
-              <span className="text-foreground group-hover:text-primary transition-colors">
-                Instant Access
-              </span>
-            </div>
-            <div className="flex items-center space-x-3 group">
-              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                <Sparkles className="h-4 w-4 text-purple-400" />
-              </div>
-              <span className="text-foreground group-hover:text-primary transition-colors">
-                Premium Features
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -266,7 +238,7 @@ export default function RegisterPage() {
                     <Input
                       id="regno"
                       type="text"
-                      placeholder="23Bxx1xxx/24xx1xxx"
+                      placeholder="Type your Registration Number"
                       value={regno}
                       onChange={(e) => setregno(e.target.value)}
                       className="pl-10 h-12 bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
