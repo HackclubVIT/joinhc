@@ -50,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const role = data?.role || "applicant"
       setUserRole(role)
+      console.log("User role fetched:", role)
       return role
     } catch (err) {
       console.error("Error in fetchUserRole:", err)

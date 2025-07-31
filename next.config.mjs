@@ -9,6 +9,25 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-}
+  reactStrictMode: true,
+  compiler: {
+    styledComponents: {
+      displayName: true,
+      ssr: true,
+      fileName: true,
+      minify: true,
+      transpileTemplateLiterals: false,
+      pure: true,
+      cssProp: true,
+    },
+    reactRemoveProperties: {
+      properties: ['^data-test$', '^data-custom$'],
+    },
+  },
+  experimental: {
+    swcTraceProfiling: true,
+  },
+  transpilePackages: ['@acme/ui', 'lodash-es'],
+};
 
-export default nextConfig
+export default nextConfig;
