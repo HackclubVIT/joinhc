@@ -13,10 +13,38 @@ export async function createClient() {
           return cookieStore.get(name)?.value
         },
         set(name, value, options) {
-          cookieStore.set({ name, value, ...options })
+          try {
+            cookieStore.set({ 
+              name, 
+              value, 
+              ...options,
+              // Ensure secure cookies in production
+              secure: process.env.NODE_ENV === 'production',
+              httpOnly: true,
+              sameSite: 'lax',
+              path: '/',
+            })
+          } catch (error) {
+            // Handle cookie setting errors gracefully
+            console.error('Error setting cookie:', error)
+          }
         },
         remove(name, options) {
-          cookieStore.set({ name, value: "", ...options })
+          try {
+            cookieStore.set({ 
+              name, 
+              value: "", 
+              ...options,
+              // Ensure secure cookies in production
+              secure: process.env.NODE_ENV === 'production',
+              httpOnly: true,
+              sameSite: 'lax',
+              path: '/',
+            })
+          } catch (error) {
+            // Handle cookie removal errors gracefully
+            console.error('Error removing cookie:', error)
+          }
         },
       },
     }

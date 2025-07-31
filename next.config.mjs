@@ -1,5 +1,31 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    swcTraceProfiling: true,
+  },
+  serverExternalPackages: ['@supabase/ssr'],
+  // Security headers for production
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin',
+          },
+        ],
+      },
+    ]
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -23,9 +49,6 @@ const nextConfig = {
     reactRemoveProperties: {
       properties: ['^data-test$', '^data-custom$'],
     },
-  },
-  experimental: {
-    swcTraceProfiling: true,
   },
   transpilePackages: ['@acme/ui', 'lodash-es'],
 };

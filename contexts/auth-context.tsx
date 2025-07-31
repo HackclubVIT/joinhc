@@ -13,6 +13,7 @@ type AuthContextType = {
   session: Session | null
   isLoading: boolean
   userRole: UserRole | null
+  isInitialized: boolean
   refreshUserRole: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signUp: (email: string, password: string, regno: string, mobile: string, full_name: string) => Promise<{ error: any; data: any }>
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [userRole, setUserRole] = useState<UserRole | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isInitialized, setIsInitialized] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
   const supabase = createClient()
 
@@ -34,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsHydrated(true)
   }, [])
 
-  const fetchUserRole = async (userId: string) => {
+  const fetchUserRole = async (userId: string, retries = 0): Promise<UserRole> => {
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -44,6 +46,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error("Error fetching user role:", error)
+        if (retries < 3) {
+          // Retry with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000))
+          return fetchUserRole(userId, retries + 1)
+        }
         setUserRole("applicant")
         return "applicant"
       }
@@ -54,6 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return role
     } catch (err) {
       console.error("Error in fetchUserRole:", err)
+      if (retries < 3) {
+        // Retry with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000))
+        return fetchUserRole(userId, retries + 1)
+      }
       setUserRole("applicant")
       return "applicant"
     }
@@ -64,13 +76,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchUserRole(user.id)
   }
 
+  // Initialize auth state
   useEffect(() => {
     if (!isHydrated) return
 
     let mounted = true
 
-    const getSession = async () => {
+    const initializeAuth = async () => {
       try {
+        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession()
 
         if (!mounted) return
@@ -78,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           console.error("Error getting session:", error)
           setIsLoading(false)
+          setIsInitialized(true)
           return
         }
 
@@ -90,19 +105,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         setIsLoading(false)
+        setIsInitialized(true)
       } catch (err) {
-        console.error("Error in getSession:", err)
+        console.error("Error in initializeAuth:", err)
         if (mounted) {
           setIsLoading(false)
+          setIsInitialized(true)
         }
       }
     }
 
-    getSession()
+    initializeAuth()
 
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return
+        
+        console.log("Auth state change:", event, session?.user?.id)
         
         if (session) {
           setSession(session)
@@ -186,6 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     isLoading,
     userRole,
+    isInitialized,
     refreshUserRole,
     signIn,
     signUp,
