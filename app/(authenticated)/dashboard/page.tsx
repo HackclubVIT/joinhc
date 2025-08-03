@@ -25,6 +25,7 @@ import {
   Award,
   Target,
   Video,
+  XCircle,
 } from "lucide-react";
 import {
   getApplicationForUser,
@@ -34,11 +35,15 @@ import {
   getOverallApplicationStatus,
   getPreferenceSelectionInfo,
   getApplicationDeadline,
+  getShortlistDeadline,
   getAvailableTimeSlotsForPanel,
   getApplicantTimeSlot,
   bookApplicantTimeSlot,
   cancelApplicantTimeSlot,
   getPanelByDepartment,
+  isApplicantAssignedToPanel,
+  isApplicantEvaluated,
+  getResultsPublicationDeadline,
 } from "@/lib/supabase/data-fetching";
 import { createClient } from "@/lib/supabase/client";
 import { HackClubLogo } from "@/components/hackclub-logo";
@@ -49,6 +54,7 @@ import { format } from "date-fns";
 export default function ApplicantDashboard() {
   const [application, setApplication] = useState<any>(null);
   const [deadline, setDeadline] = useState<Date | null>(null);
+  const [shortlistDeadline, setShortlistDeadline] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [departmentNames, setDepartmentNames] = useState<{
     first: string;
@@ -71,6 +77,9 @@ export default function ApplicantDashboard() {
   const [meetDialogMsg, setMeetDialogMsg] = useState("");
   
   const [openSlotModal, setOpenSlotModal] = useState<Pref | null>(null);
+  const [panelAssignments, setPanelAssignments] = useState<Record<Pref, boolean>>({ first: false, second: false });
+  const [evaluationStatus, setEvaluationStatus] = useState<Record<Pref, boolean>>({ first: false, second: false });
+  const [resultsPublicationDeadline, setResultsPublicationDeadline] = useState<Date | null>(null);
 
   const supabase = createClient();
 
@@ -92,7 +101,17 @@ export default function ApplicantDashboard() {
         pref === "first"
           ? app.first_pref_status
           : app.second_pref_status;
-      if (!panelId || status !== "shortlisted") {
+      
+      
+      const isAssigned = await isApplicantAssignedToPanel(app.applicant_id, pref);
+      setPanelAssignments(prev => ({ ...prev, [pref]: isAssigned }));
+      
+      
+      const departmentId = pref === "first" ? app.first_pref_dept_id : app.second_pref_dept_id;
+      const isEvaluated = await isApplicantEvaluated(app.id, departmentId);
+      setEvaluationStatus(prev => ({ ...prev, [pref]: isEvaluated }));
+      
+      if (!panelId || status !== "shortlisted" || !isAssigned) {
         setSlotData((d) => ({ ...d, [pref]: { slots: [], booking: null, panel: null, meetLink: null } }));
         setSlotLoading((l) => ({ ...l, [pref]: false }));
         return;
@@ -127,9 +146,11 @@ export default function ApplicantDashboard() {
           return;
         }
 
-        const [applicationData, applicationDeadline, departments] = await Promise.all([
+        const [applicationData, applicationDeadline, shortlistDeadlineData, resultsPublicationDeadlineData, departments] = await Promise.all([
           getApplicationForUser(),
           getApplicationDeadline(),
+          getShortlistDeadline(),
+          getResultsPublicationDeadline(),
           getDepartments(),
         ]);
 
@@ -159,6 +180,14 @@ export default function ApplicantDashboard() {
         if (applicationDeadline?.deadline) {
           setDeadline(new Date(applicationDeadline.deadline));
         }
+        
+        if (shortlistDeadlineData?.deadline) {
+          setShortlistDeadline(new Date(shortlistDeadlineData.deadline));
+        }
+        
+        if (resultsPublicationDeadlineData) {
+          setResultsPublicationDeadline(resultsPublicationDeadlineData);
+        }
       } catch (err) {
         console.error("Error fetching data:", err);
       } finally {
@@ -174,6 +203,10 @@ export default function ApplicantDashboard() {
   const today = new Date();
   const deadlinePassed = deadline ? today > deadline : false;
   const applicationSubmitted = !!application;
+  
+  
+  const displayDeadline = deadlinePassed && shortlistDeadline ? shortlistDeadline : deadline;
+  const displayDeadlinePassed = displayDeadline ? today > displayDeadline : false;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -183,10 +216,11 @@ export default function ApplicantDashboard() {
         return "bg-green-500";
       case "shortlisted":
         return "bg-blue-500";
-      case "waitlisted":
-        return "bg-yello-500";
+
       case "rejected":
         return "bg-red-500";
+        case "rejected":
+    return "bg-red-500";
       default:
         return "bg-gray-500";
     }
@@ -255,18 +289,17 @@ export default function ApplicantDashboard() {
             : "You have been shortlisted!",
           color: "text-green-600 dark:text-green-400",
         };
-      case "waitlisted":
+
+      case "not_selected":
         return {
-          title: "You're on the waitlist",
+          title: "Application decision",
           description:
-            selectedDepartment && !bothShortlisted
-              ? `You've been waitlisted for ${selectedDepartment}. We'll notify you if a spot becomes available.`
-              : "You've been waitlisted. We'll notify you if a spot becomes available.",
-          color: "text-blue-600 dark:text-blue-400",
+            "Thank you for your interest. Unfortunately, we cannot offer you a position at this time.",
+          color: "text-red-600 dark:text-red-400",
         };
       case "rejected":
         return {
-          title: "Application decision",
+          title: "Final decision",
           description:
             "Thank you for your interest. Unfortunately, we cannot offer you a position at this time.",
           color: "text-red-600 dark:text-red-400",
@@ -298,6 +331,106 @@ export default function ApplicantDashboard() {
     const d = toIST(date);
     if (isNaN(d.getTime())) return "—";
     return format(d, "yyyy-MM-dd HH:mm");
+  };
+
+  const shouldShowResults = () => {
+    if (!resultsPublicationDeadline) return false;
+    const now = new Date();
+    return now >= resultsPublicationDeadline;
+  };
+
+  const getStatusBadge = (status: string, preference: 'first' | 'second') => {
+    const statusKey = preference === 'first' ? 'first_pref_status' : 'second_pref_status';
+    const currentStatus = application[statusKey];
+    
+    
+    if (shouldShowResults()) {
+      switch (currentStatus) {
+        case 'accepted':
+          return (
+            <Badge className="bg-green-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Accepted
+            </Badge>
+          );
+        case 'rejected':
+          return (
+            <Badge className="bg-red-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <XCircle className="h-3 w-3 mr-1" />
+              Not Selected
+            </Badge>
+          );
+        case 'shortlisted':
+          return (
+            <Badge className="bg-green-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Shortlisted
+            </Badge>
+          );
+        case 'not_selected':
+          return (
+            <Badge className="bg-red-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <XCircle className="h-3 w-3 mr-1" />
+              Rejected
+            </Badge>
+          );
+        case 'pending':
+          return (
+            <Badge className="bg-yellow-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <Clock className="h-3 w-3 mr-1" />
+              Pending
+            </Badge>
+          );
+        default:
+          return (
+            <Badge className="bg-gray-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <Clock className="h-3 w-3 mr-1" />
+              Pending
+            </Badge>
+          );
+      }
+    } else {
+      
+      switch (currentStatus) {
+        case 'shortlisted':
+          return (
+            <Badge className="bg-green-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Shortlisted
+            </Badge>
+          );
+        case 'not_selected':
+          return (
+            <Badge className="bg-red-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <XCircle className="h-3 w-3 mr-1" />
+              Rejected
+            </Badge>
+          );
+        case 'pending':
+          return (
+            <Badge className="bg-yellow-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <Clock className="h-3 w-3 mr-1" />
+              Pending
+            </Badge>
+          );
+        case 'accepted':
+        case 'rejected':
+          
+          return (
+            <Badge className="bg-green-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Shortlisted
+            </Badge>
+          );
+        default:
+          return (
+            <Badge className="bg-gray-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
+              <Clock className="h-3 w-3 mr-1" />
+              Pending
+            </Badge>
+          );
+      }
+    }
   };
 
   return (
@@ -365,11 +498,11 @@ export default function ApplicantDashboard() {
             <div className="stats-card">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xl sm:text-2xl font-black gradient-text-accent">
-                  {deadline
+                  {displayDeadline
                     ? Math.max(
                         0,
                         Math.ceil(
-                          (deadline.getTime() - today.getTime()) /
+                          (displayDeadline.getTime() - today.getTime()) /
                             (1000 * 60 * 60 * 24)
                         )
                       )
@@ -382,7 +515,9 @@ export default function ApplicantDashboard() {
               <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                 Days Left
               </p>
-              <p className="text-xs text-muted-foreground">Until deadline</p>
+              <p className="text-xs text-muted-foreground">
+                {deadlinePassed && shortlistDeadline ? "Until shortlist deadline" : "Until deadline"}
+              </p>
             </div>
 
             <div className="stats-card">
@@ -461,8 +596,7 @@ export default function ApplicantDashboard() {
                           overallStatus === "shortlisted" ||
                           overallStatus === "accepted"
                             ? "bg-green-500/20 border border-green-500/30"
-                            : overallStatus === "waitlisted"
-                            ? "bg-blue-500/20 border border-blue-500/30"
+
                             : overallStatus === "rejected"
                             ? "bg-red-500/20 border border-red-500/30"
                             : "bg-yellow-500/20 border border-yellow-500/30"
@@ -477,8 +611,7 @@ export default function ApplicantDashboard() {
                               overallStatus === "shortlisted" ||
                               overallStatus === "accepted"
                                 ? "status-shortlisted"
-                                : overallStatus === "waitlisted"
-                                ? "status-waitlisted"
+
                                 : overallStatus === "rejected"
                                 ? "status-rejected"
                                 : "status-pending"
@@ -527,8 +660,7 @@ export default function ApplicantDashboard() {
                           overallStatus === "shortlisted" ||
                           overallStatus === "accepted"
                             ? "bg-green-500/10 border-green-500/30"
-                            : overallStatus === "waitlisted"
-                            ? "bg-blue-500/10 border-blue-500/30"
+
                             : overallStatus === "rejected"
                             ? "bg-red-500/10 border-red-500/30"
                             : "bg-yellow-500/10 border-yellow-500/30"
@@ -584,16 +716,16 @@ export default function ApplicantDashboard() {
                   <Link href="/application" className="w-full">
                     <Button
                       className="w-full h-12 premium-button"
-                      disabled={deadlinePassed}
+                      disabled={displayDeadlinePassed}
                     >
-                      {deadlinePassed
+                      {displayDeadlinePassed
                         ? "Deadline Passed"
                         : "Start Application"}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </Link>
                 )}
-                {applicationSubmitted && !deadlinePassed && (
+                {applicationSubmitted && !displayDeadlinePassed && (
                   <Link href="/application" className="w-full">
                     <Button
                       variant="outline"
@@ -633,99 +765,141 @@ export default function ApplicantDashboard() {
                   </div>
                 ) : applicationSubmitted ? (
                   <div className="space-y-4">
-                    {/* Department Preferences Card with individual status indicators */}
-                    <div className="space-y-4">
+                    {/* Enhanced Department Preferences Cards */}
+                    <div className="space-y-6">
+                      {/* First Preference Card */}
                       <div
-                        className={`p-4 sm:p-6 rounded-xl border-l-4 ${
+                        className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
                           application.first_pref_status === "accepted"
-                            ? "bg-green-900/30 border-green-500"
+                            ? "bg-gradient-to-br from-green-900/40 to-emerald-900/20 border-green-500/50 shadow-green-500/10"
                             : application.first_pref_status === "rejected"
-                            ? "bg-red-900/30 border-red-500"
+                            ? "bg-gradient-to-br from-red-900/40 to-rose-900/20 border-red-500/50 shadow-red-500/10"
                             : application.first_pref_status === "shortlisted"
-                            ? "bg-blue-900/30 border-blue-500"
+                            ? "bg-gradient-to-br from-blue-900/40 to-indigo-900/20 border-blue-500/50 shadow-blue-500/10"
                             : application.first_pref_status === "waitlisted"
-                            ? "bg-yellow-900/30 border-yellow-500"
-                            : "bg-gray-800/50 border-gray-500"
+                            ? "bg-gradient-to-br from-yellow-900/40 to-amber-900/20 border-yellow-500/50 shadow-yellow-500/10"
+                            : "bg-gradient-to-br from-gray-800/50 to-gray-700/30 border-gray-500/50 shadow-gray-500/10"
                         }`}
                       >
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 mb-2">
-                          <span className={`text-sm font-medium ${
-                            application.first_pref_status === "accepted"
-                              ? "text-green-400"
-                              : application.first_pref_status === "rejected"
-                              ? "text-red-400"
-                              : application.first_pref_status === "shortlisted"
-                              ? "text-blue-400"
-                              : application.first_pref_status === "waitlisted"
-                              ? "text-yellow-400"
-                              : "text-gray-400"
-                          }`}>
-                            First Preference
-                          </span>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge className={`text-white text-xs sm:text-sm ${
-                              application.first_pref_status === "accepted"
-                                ? "bg-green-600"
-                                : application.first_pref_status === "rejected"
-                                ? "bg-red-600"
-                                : application.first_pref_status === "shortlisted"
-                                ? "bg-blue-600"
-                                : application.first_pref_status === "waitlisted"
-                                ? "bg-yellow-600"
-                                : "bg-gray-600"
-                            }`}>1st</Badge>
-                            {application.first_pref_status === "accepted" && (
-                              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
-                                ✓ Accepted
-                              </Badge>
-                            )}
-                            {application.first_pref_status ===
-                              "shortlisted" && (
-                              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
-                                ✓ Shortlisted
-                              </Badge>
-                            )}
-                            {application.first_pref_status === "waitlisted" && (
-                              <Badge className="bg-blue-500 text-white text-xs sm:text-sm">
-                                Waitlisted
-                              </Badge>
-                            )}
-                            {application.first_pref_status === "rejected" && (
-                              <Badge className="bg-red-500 text-white text-xs sm:text-sm">Rejected</Badge>
-                            )}
+                        {/* Background Pattern */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-30"></div>
+                        
+                        <div className="relative p-6">
+                          {/* Header Section */}
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl ${
+                                application.first_pref_status === "accepted"
+                                  ? "bg-green-500/20 text-green-400"
+                                  : application.first_pref_status === "rejected"
+                                  ? "bg-red-500/20 text-red-400"
+                                  : application.first_pref_status === "shortlisted"
+                                  ? "bg-blue-500/20 text-blue-400"
+                                  : application.first_pref_status === "waitlisted"
+                                  ? "bg-yellow-500/20 text-yellow-400"
+                                  : "bg-gray-500/20 text-gray-400"
+                              }`}>
+                                <Target className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <span className={`text-sm font-semibold tracking-wide uppercase ${
+                                  application.first_pref_status === "accepted"
+                                    ? "text-green-400"
+                                    : application.first_pref_status === "rejected"
+                                    ? "text-red-400"
+                                    : application.first_pref_status === "shortlisted"
+                                    ? "text-blue-400"
+                                    : application.first_pref_status === "waitlisted"
+                                    ? "text-yellow-400"
+                                    : "text-gray-400"
+                                }`}>
+                                  First Preference
+                                </span>
+                                <p className="text-lg sm:text-xl font-bold text-white mt-1">
+                                  {departmentNames.first}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Status Badges */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className={`text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full ${
+                                application.first_pref_status === "accepted"
+                                  ? "bg-green-600/80 backdrop-blur-sm"
+                                  : application.first_pref_status === "rejected"
+                                  ? "bg-red-600/80 backdrop-blur-sm"
+                                  : application.first_pref_status === "shortlisted"
+                                  ? "bg-blue-600/80 backdrop-blur-sm"
+                                  : application.first_pref_status === "waitlisted"
+                                  ? "bg-yellow-600/80 backdrop-blur-sm"
+                                  : "bg-gray-600/80 backdrop-blur-sm"
+                              }`}>1st</Badge>
+                              {getStatusBadge(application.first_pref_status, 'first')}
+                            </div>
                           </div>
-                        </div>
-                        <p className="text-base sm:text-lg font-semibold">
-                          {departmentNames.first}
-                        </p>
-                        {application.first_pref_status === "shortlisted" && (
+                          
+                          {/* Content Section */}
+                          {application.first_pref_status === "shortlisted" && (
                           <div className="mt-4">
-                            {/* Debug info for troubleshooting Join Meet button */}
-                            {slotData.first.booking && (
-                              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
-                                <div>Current IST: {formatIST(new Date())}</div>
-                                <div>Slot start: {formatIST(slotData.first.booking.start_time)}</div>
-                                <div>Slot end: {formatIST(slotData.first.booking.end_time)}</div>
+                            {!panelAssignments.first ? (
+                              <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-4 w-4" />
+                                  <span>Wait till the shortlist period to get over</span>
+                                </div>
+                                <p className="text-xs text-amber-300 mt-1">
+                                  You'll be able to book slots once the shortlist period ends
+                                </p>
                               </div>
-                            )}
-                            {/* Join Meet button outside modal */}
-                            {slotData.first.booking && canShowMeetLink(slotData.first.booking) && (
-                              <div className="mb-2">
-                                <a href={slotData.first.meetLink || ''} target="_blank" rel="noopener noreferrer">
-                                <Button size="sm" variant="outline" className="flex items-center gap-2 border-red-700 border-2 w-full sm:w-auto text-xs sm:text-sm">
-                                    <Video className="h-4 w-4" />
-                                    Join Meet
-                                  </Button>
-                                </a>
+                            ) : evaluationStatus.first ? (
+                              <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="h-4 w-4" />
+                                  <span>Evaluation completed</span>
+                                </div>
+                                <p className="text-xs text-green-300 mt-1">
+                                  Your interview has been completed and evaluated
+                                </p>
                               </div>
+                            ) : (
+                              <>
+                                {/* Debug info for troubleshooting Join Meet button */}
+                                {slotData.first.booking && (
+                                  <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
+                                    <div>Slot start: {formatIST(slotData.first.booking.start_time)}</div>
+                                    <div>Slot end: {formatIST(slotData.first.booking.end_time)}</div>
+                                  </div>
+                                )}
+                                {/* Join Meet button outside modal */}
+                                {slotData.first.booking && canShowMeetLink(slotData.first.booking) && (
+                                  <div className="mb-2">
+                                    <a href={slotData.first.meetLink || ''} target="_blank" rel="noopener noreferrer">
+                                    <Button size="sm" variant="outline" className="flex items-center gap-2 border-red-700 border-2 w-full sm:w-auto text-xs sm:text-sm">
+                                        <Video className="h-4 w-4" />
+                                        Join Meet
+                                      </Button>
+                                    </a>
+                                  </div>
+                                )}
+                                {/* Meet link access info */}
+                                {slotData.first.booking && (
+                                  <div className="text-xs text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="h-3 w-3" />
+                                      <span>You will get access to the meet link 10 minutes before your time slot</span>
+                                    </div>
+                                  </div>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setOpenSlotModal('first')}
+                                  disabled={evaluationStatus.first}
+                                  className="mb-2 w-full sm:w-auto text-sm sm:text-base"
+                                >
+                                  Book/Manage Slot
+                                </Button>
+                              </>
                             )}
-                            <Button
-                              variant="outline"
-                              onClick={() => setOpenSlotModal('first')}
-                                className="mb-2 w-full sm:w-auto text-sm sm:text-base"
-                            >
-                              Book/Manage Slot
-                            </Button>
                             <Dialog open={openSlotModal === 'first'} onOpenChange={(open) => setOpenSlotModal(open ? 'first' : null)}>
                                 <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
                                 <DialogHeader>
@@ -779,8 +953,12 @@ export default function ApplicantDashboard() {
                                                   <Button
                                                     size="sm"
                                                     onClick={async () => {
-                                                      await bookApplicantTimeSlot(application.applicant_id, slotData.first.panel.id, slot.id);
-                                                      fetchSlotData('first');
+                                                      try {
+                                                        await bookApplicantTimeSlot(application.applicant_id, slotData.first.panel.id, slot.id);
+                                                        fetchSlotData('first');
+                                                      } catch (error: any) {
+                                                        alert(error.message || 'Failed to book slot');
+                                                      }
                                                     }}
                                                   >
                                                     Book
@@ -797,102 +975,143 @@ export default function ApplicantDashboard() {
                               </DialogContent>
                             </Dialog>
                           </div>
-                          )}
+                        )}
+                        </div>
                       </div>
 
+                      {/* Second Preference Card */}
                       <div
-                        className={`p-4 sm:p-6 rounded-xl border-l-4 ${
+                        className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
                           application.second_pref_status === "accepted"
-                            ? "bg-green-900/30 border-green-500"
+                            ? "bg-gradient-to-br from-green-900/40 to-emerald-900/20 border-green-500/50 shadow-green-500/10"
                             : application.second_pref_status === "rejected"
-                            ? "bg-red-900/30 border-red-500"
+                            ? "bg-gradient-to-br from-red-900/40 to-rose-900/20 border-red-500/50 shadow-red-500/10"
                             : application.second_pref_status === "shortlisted"
-                            ? "bg-blue-900/30 border-blue-500"
+                            ? "bg-gradient-to-br from-blue-900/40 to-indigo-900/20 border-blue-500/50 shadow-blue-500/10"
                             : application.second_pref_status === "waitlisted"
-                            ? "bg-yellow-900/30 border-yellow-500"
-                            : "bg-gray-800/50 border-gray-500"
+                            ? "bg-gradient-to-br from-yellow-900/40 to-amber-900/20 border-yellow-500/50 shadow-yellow-500/10"
+                            : "bg-gradient-to-br from-gray-800/50 to-gray-700/30 border-gray-500/50 shadow-gray-500/10"
                         }`}
                       >
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 mb-2">
-                          <span className={`text-sm font-medium ${
-                            application.second_pref_status === "accepted"
-                              ? "text-green-400"
-                              : application.second_pref_status === "rejected"
-                              ? "text-red-400"
-                              : application.second_pref_status === "shortlisted"
-                              ? "text-blue-400"
-                              : application.second_pref_status === "waitlisted"
-                              ? "text-yellow-400"
-                              : "text-gray-400"
-                          }`}>
-                            Second Preference
-                          </span>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge className={`text-white text-xs sm:text-sm ${
-                              application.second_pref_status === "accepted"
-                                ? "bg-green-600"
-                                : application.second_pref_status === "rejected"
-                                ? "bg-red-600"
-                                : application.second_pref_status === "shortlisted"
-                                ? "bg-blue-600"
-                                : application.second_pref_status === "waitlisted"
-                                ? "bg-yellow-600"
-                                : "bg-gray-600"
-                            }`}>2nd</Badge>
-                            {application.second_pref_status === "accepted" && (
-                              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
-                                ✓ Accepted
-                              </Badge>
-                            )}
-                            {application.second_pref_status ===
-                              "shortlisted" && (
-                              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
-                                ✓ Shortlisted
-                              </Badge>
-                            )}
-                            {application.second_pref_status ===
-                              "waitlisted" && (
-                              <Badge className="bg-blue-500 text-white text-xs sm:text-sm">
-                                Waitlisted
-                              </Badge>
-                            )}
-                            {application.second_pref_status === "rejected" && (
-                              <Badge className="bg-red-500 text-white text-xs sm:text-sm">Rejected</Badge>
-                            )}
+                        {/* Background Pattern */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-30"></div>
+                        
+                        <div className="relative p-6">
+                          {/* Header Section */}
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl ${
+                                application.second_pref_status === "accepted"
+                                  ? "bg-green-500/20 text-green-400"
+                                  : application.second_pref_status === "rejected"
+                                  ? "bg-red-500/20 text-red-400"
+                                  : application.second_pref_status === "shortlisted"
+                                  ? "bg-blue-500/20 text-blue-400"
+                                  : application.second_pref_status === "waitlisted"
+                                  ? "bg-yellow-500/20 text-yellow-400"
+                                  : "bg-gray-500/20 text-gray-400"
+                              }`}>
+                                <Target className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <span className={`text-sm font-semibold tracking-wide uppercase ${
+                                  application.second_pref_status === "accepted"
+                                    ? "text-green-400"
+                                    : application.second_pref_status === "rejected"
+                                    ? "text-red-400"
+                                    : application.second_pref_status === "shortlisted"
+                                    ? "text-blue-400"
+                                    : application.second_pref_status === "waitlisted"
+                                    ? "text-yellow-400"
+                                    : "text-gray-400"
+                                }`}>
+                                  Second Preference
+                                </span>
+                                <p className="text-lg sm:text-xl font-bold text-white mt-1">
+                                  {departmentNames.second}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Status Badges */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className={`text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full ${
+                                application.second_pref_status === "accepted"
+                                  ? "bg-green-600/80 backdrop-blur-sm"
+                                  : application.second_pref_status === "rejected"
+                                  ? "bg-red-600/80 backdrop-blur-sm"
+                                  : application.second_pref_status === "shortlisted"
+                                  ? "bg-blue-600/80 backdrop-blur-sm"
+                                  : application.second_pref_status === "waitlisted"
+                                  ? "bg-yellow-600/80 backdrop-blur-sm"
+                                  : "bg-gray-600/80 backdrop-blur-sm"
+                              }`}>2nd</Badge>
+                              {getStatusBadge(application.second_pref_status, 'second')}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-0">
-                          <p className="text-base sm:text-lg font-semibold">
-                            {departmentNames.second}
-                          </p>
+                          
+                          {/* Content Section */}
                           {application.second_pref_status === "shortlisted" && (
                             <div className="mt-4">
-                              {/* Debug info for troubleshooting Join Meet button */}
-                              {slotData.second.booking && (
-                                <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
-                                  <div>Current IST: {formatIST(new Date())}</div>
-                                  <div>Slot start: {formatIST(slotData.second.booking.start_time)}</div>
-                                  <div>Slot end: {formatIST(slotData.second.booking.end_time)}</div>
+                              {!panelAssignments.second ? (
+                                <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="h-4 w-4" />
+                                    <span>Wait till the shortlist period to get over</span>
+                                  </div>
+                                  <p className="text-xs text-amber-300 mt-1">
+                                    You'll be able to book slots once the shortlist period ends
+                                  </p>
                                 </div>
-                              )}
-                              {/* Join Meet button outside modal */}
-                              {slotData.second.booking && canShowMeetLink(slotData.second.booking) && (
-                                <div className="mb-2">
-                                  <a href={slotData.second.meetLink || ''} target="_blank" rel="noopener noreferrer">
-                                <Button size="sm" variant="outline" className="flex items-center gap-2 border-red-700 border-2 w-full sm:w-auto text-xs sm:text-sm">
-                                      <Video className="h-4 w-4" />
-                                      Join Meet
-                                    </Button>
-                                  </a>
+                              ) : evaluationStatus.second ? (
+                                <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle className="h-4 w-4" />
+                                    <span>Evaluation completed</span>
+                                  </div>
+                                  <p className="text-xs text-green-300 mt-1">
+                                    Your interview has been completed and evaluated
+                                  </p>
                                 </div>
-                              )}
-                              <Button
-                                variant="outline"
-                                onClick={() => setOpenSlotModal('second')}
-                                className="mb-2 w-full sm:w-auto text-sm sm:text-base"
-                              >
-                                Book/Manage Slot
-                              </Button>
+                              ) : (
+                                <>
+                                  {/* Debug info for troubleshooting Join Meet button */}
+                                  {slotData.second.booking && (
+                                    <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>  
+                                      <div>Slot start: {formatIST(slotData.second.booking.start_time)}</div>
+                                      <div>Slot end: {formatIST(slotData.second.booking.end_time)}</div>
+                                    </div>
+                                  )}
+                                  {/* Join Meet button outside modal */}
+                                  {slotData.second.booking && canShowMeetLink(slotData.second.booking) && (
+                                    <div className="mb-2">
+                                      <a href={slotData.second.meetLink || ''} target="_blank" rel="noopener noreferrer">
+                                    <Button size="sm" variant="outline" className="flex items-center gap-2 border-red-700 border-2 w-full sm:w-auto text-xs sm:text-sm">
+                                        <Video className="h-4 w-4" />
+                                        Join Meet
+                                      </Button>
+                                    </a>
+                                  </div>
+                                )}
+                                {/* Meet link access info */}
+                                {slotData.second.booking && (
+                                  <div className="text-xs text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="h-3 w-3" />
+                                      <span>You will get access to the meet link 10 minutes before your time slot</span>
+                                    </div>
+                                  </div>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setOpenSlotModal('second')}
+                                  disabled={evaluationStatus.second}
+                                  className="mb-2 w-full sm:w-auto text-sm sm:text-base"
+                                >
+                                  Book/Manage Slot
+                                </Button>
+                              </>
+                            )}
                               <Dialog open={openSlotModal === 'second'} onOpenChange={(open) => setOpenSlotModal(open ? 'second' : null)}>
                                 <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
                                   <DialogHeader>
@@ -946,8 +1165,12 @@ export default function ApplicantDashboard() {
                                                     <Button
                                                       size="sm"
                                                       onClick={async () => {
-                                                        await bookApplicantTimeSlot(application.applicant_id, slotData.second.panel.id, slot.id);
-                                                        fetchSlotData('second');
+                                                        try {
+                                                          await bookApplicantTimeSlot(application.applicant_id, slotData.second.panel.id, slot.id);
+                                                          fetchSlotData('second');
+                                                        } catch (error: any) {
+                                                          alert(error.message || 'Failed to book slot');
+                                                        }
                                                       }}
                                                     >
                                                       Book
@@ -964,15 +1187,8 @@ export default function ApplicantDashboard() {
                                 </DialogContent>
                               </Dialog>
                             </div>
-                            )}
-                        </div>
-                        {application.first_pref_status === "shortlisted" &&
-                          application.second_pref_status === "shortlisted" && (
-                            <p className="text-sm text-green-600 dark:text-green-400 mt-1 font-medium">
-                              🎉 Congratulations! You're shortlisted for this
-                              department!
-                            </p>
                           )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1011,11 +1227,11 @@ export default function ApplicantDashboard() {
                   <div className="flex justify-between items-center p-3 sm:p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-red-800 dark:text-red-200 text-sm sm:text-base">
-                        Application Deadline
+                        {deadlinePassed && shortlistDeadline ? "Shortlist Deadline" : "Application Deadline"}
                       </p>
                       <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">
-                        {deadline
-                          ? deadline.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
+                        {displayDeadline
+                          ? displayDeadline.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
                           : "Loading..."}
                       </p>
                     </div>

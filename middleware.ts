@@ -1,85 +1,178 @@
-import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
+import { createServerClient } from "@supabase/ssr"
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  const response = NextResponse.next();
+  const url = request.nextUrl.clone();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
+        get(name) {
+          return request.cookies.get(name)?.value
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value)
-            supabaseResponse.cookies.set(name, value, {
-              ...options,
-              // Ensure secure cookies in production
-              secure: process.env.NODE_ENV === 'production',
-              httpOnly: true,
-              sameSite: 'lax',
-              path: '/',
-            })
-          })
+        set(name, value, options) {
+          request.cookies.set({ name, value, ...options })
+          response.cookies.set({ name, value, ...options })
+        },
+        remove(name, options) {
+          request.cookies.set({ name, value: "", ...options })
+          response.cookies.set({ name, value: "", ...options })
         },
       },
-    }
+    },
   )
 
-  // Refresh session if expired - required for Server Components
-  const { data: { session } } = await supabase.auth.getSession()
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
 
-  // If accessing protected routes without session, redirect to login
-  const isProtectedRoute = request.nextUrl.pathname.startsWith('/admin') ||
-                          request.nextUrl.pathname.startsWith('/dashboard') ||
-                          request.nextUrl.pathname.startsWith('/application') ||
-                          request.nextUrl.pathname.startsWith('/profile')
-
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
-                     request.nextUrl.pathname.startsWith('/register') ||
-                     request.nextUrl.pathname.startsWith('/auth')
-
-  if (isProtectedRoute && !session) {
-    const redirectUrl = new URL('/login', request.url)
-    redirectUrl.searchParams.set('redirectTo', request.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
-  }
-
-  // If accessing auth routes with session, redirect to appropriate dashboard
-  if (isAuthRoute && session) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    let redirectPath = '/dashboard'
-    if (profile?.role === 'admin') {
-      redirectPath = '/admin'
-    } else if (profile?.role === 'recruiter') {
-      redirectPath = '/dashboard/recruiter'
+    if (
+      request.nextUrl.pathname.startsWith("/dashboard") ||
+      request.nextUrl.pathname.startsWith("/application") ||
+      request.nextUrl.pathname.startsWith("/profile") ||
+      request.nextUrl.pathname.startsWith("/admin")
+    ) {
+      if (!user) {
+        const redirectUrl = new URL("/login", request.url)
+        redirectUrl.searchParams.set("redirect", request.nextUrl.pathname)
+        return NextResponse.redirect(redirectUrl)
+      }
+      
+      
+      if (request.nextUrl.pathname.startsWith("/admin")) {
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          
+          if (profileData?.role !== "admin") {
+            
+            const redirectPath = profileData?.role === "recruiter" ? "/dashboard/recruiter" : "/dashboard"
+            return NextResponse.redirect(new URL(redirectPath, request.url))
+          }
+        } catch (error) {
+          console.error("Error checking admin role:", error)
+          return NextResponse.redirect(new URL("/dashboard", request.url))
+        }
+      }
+      
+      
+      if (request.nextUrl.pathname.startsWith("/application")) {
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          
+          if (profileData?.role !== "applicant") {
+            
+            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard/recruiter"
+            return NextResponse.redirect(new URL(redirectPath, request.url))
+          }
+        } catch (error) {
+          console.error("Error checking applicant role:", error)
+          return NextResponse.redirect(new URL("/dashboard", request.url))
+        }
+      }
+      
+      
+      if (request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          
+          if (profileData?.role !== "recruiter") {
+            
+            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard"
+            return NextResponse.redirect(new URL(redirectPath, request.url))
+          }
+        } catch (error) {
+          console.error("Error checking recruiter role:", error)
+          return NextResponse.redirect(new URL("/dashboard", request.url))
+        }
+      }
+      
+      
+      if (request.nextUrl.pathname === "/dashboard" && !request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          
+          if (profileData?.role !== "applicant") {
+            
+            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard/recruiter"
+            return NextResponse.redirect(new URL(redirectPath, request.url))
+          }
+        } catch (error) {
+          console.error("Error checking applicant dashboard role:", error)
+        }
+      }
     }
 
-    return NextResponse.redirect(new URL(redirectPath, request.url))
+    
+    if (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register") {
+      if (user) {
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          
+          const role = profileData?.role;
+          let redirectPath = "/dashboard"
+          
+          if (role === "admin") {
+            redirectPath = "/admin"
+          } else if (role === "recruiter") {
+            redirectPath = "/dashboard/recruiter"
+          }
+          
+          return NextResponse.redirect(new URL(redirectPath, request.url))
+        } catch (error) {
+          console.error("Error checking role for auth redirect:", error)
+          return NextResponse.redirect(new URL("/dashboard", request.url))
+        }
+      }
+    }
+
+    
+    if (request.nextUrl.pathname === "/dashboard" && user) {
+      try {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single()
+        
+        if (profileData?.role === "recruiter") {
+          return NextResponse.redirect(new URL("/dashboard/recruiter", request.url))
+        } else if (profileData?.role === "admin") {
+          return NextResponse.redirect(new URL("/admin", request.url))
+        }
+      } catch (error) {
+        console.error("Error checking role for applicant dashboard:", error)
+      }
+    }
+  } catch (error) {
+    console.error("Middleware error:", error)
   }
 
-  return supabaseResponse
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ["/dashboard/:path*", "/application/:path*", "/profile/:path*", "/login", "/register", "/auth/callback","/admin/:path*"],
 }

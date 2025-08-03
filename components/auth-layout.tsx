@@ -17,8 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { HackClubLogo } from "@/components/hackclub-logo"
-import { getRecruiterDepartments, getPanelByDepartment, isCurrentUserRecruiterOrEvaluator } from "@/lib/supabase/data-fetching";
-
+import { getRecruiterDepartments, getPanelByDepartment, isCurrentUserRecruiterOrEvaluator, getShortlistDeadline } from "@/lib/supabase/data-fetching";
 interface AuthLayoutProps {
   children: React.ReactNode
 }
@@ -31,6 +30,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   const [recruiterPanels, setRecruiterPanels] = React.useState<any[]>([]);
   const [hasRecruiterRole, setHasRecruiterRole] = React.useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [isShortlistingDeadlineOver, setIsShortlistingDeadlineOver] = React.useState(false);
 
   React.useEffect(() => {
     const fetchDepartmentsAndPanels = async () => {
@@ -40,22 +40,29 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         setHasRecruiterRole(hasRole);
         
         if (hasRole) {
-        const depts = await getRecruiterDepartments(user.id);
-        setRecruiterDepartments(depts);
-        
-        const allPanels: any[] = [];
-        for (const dept of depts) {
-          const panels = await getPanelByDepartment(dept.department_id);
-          if (panels && panels.length > 0) {
-            for (const panel of panels) {
-              allPanels.push({ ...panel, department: dept.department });
+          const shortlistDeadline = await getShortlistDeadline();
+          if (shortlistDeadline?.deadline) {
+            const deadlineDate = new Date(shortlistDeadline.deadline);
+            const currentDate = new Date();
+            setIsShortlistingDeadlineOver(currentDate > deadlineDate);
+          }
+          
+          const depts = await getRecruiterDepartments(user.id);
+          setRecruiterDepartments(depts);
+          
+          const allPanels: any[] = [];
+          for (const dept of depts) {
+            const panels = await getPanelByDepartment(dept.department_id);
+            if (panels && panels.length > 0) {
+              for (const panel of panels) {
+                allPanels.push({ ...panel, department: dept.department });
+              }
             }
           }
-        }
-        setRecruiterPanels(allPanels);
-      } else {
-        setRecruiterDepartments([]);
-        setRecruiterPanels([]);
+          setRecruiterPanels(allPanels);
+        } else {
+          setRecruiterDepartments([]);
+          setRecruiterPanels([]);
         }
       } else {
         setRecruiterDepartments([]);
@@ -142,7 +149,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
                       </Link>
                       {recruiterDepartments && recruiterDepartments.length > 0 && (
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                          <DropdownMenuTrigger asChild >
                             <div className={`group relative px-4 lg:px-6 py-3 rounded-xl transition-all duration-300 font-semibold cursor-pointer select-none flex items-center gap-2`}>
                               Departments
                               <ChevronDown className="h-4 w-4" />
@@ -157,24 +164,26 @@ export function AuthLayout({ children }: AuthLayoutProps) {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <div className={`group relative px-4 lg:px-6 py-3 rounded-xl transition-all duration-300 ${isActive('/dashboard/recruiter/panel')
-                              ? 'bg-gradient-to-r from-red-500 to-red-600 text-primary-foreground shadow-lg shadow-red-500/25'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                            } font-semibold cursor-pointer select-none flex items-center gap-2`}>
-                            Panels
-                            <ChevronDown className="h-4 w-4" />
-                          </div>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                          {recruiterPanels.map((panel: any) => (
-                            <DropdownMenuItem asChild key={panel.id}>
-                              <Link href={`/dashboard/recruiter/panel/${panel.id}`}>{panel.name}{panel.department?.name ? ` (${panel.department.name})` : ''}</Link>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {isShortlistingDeadlineOver && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <div className={`group relative px-4 lg:px-6 py-3 rounded-xl transition-all duration-300 ${isActive('/dashboard/recruiter/panel')
+                                ? 'bg-gradient-to-r from-red-500 to-red-600 text-primary-foreground shadow-lg shadow-red-500/25'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                              } font-semibold cursor-pointer select-none flex items-center gap-2`}>
+                              Panels
+                              <ChevronDown className="h-4 w-4" />
+                            </div>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            {recruiterPanels.map((panel: any) => (
+                              <DropdownMenuItem asChild key={panel.id}>
+                                <Link href={`/dashboard/recruiter/panel/${panel.id}`}>{panel.name}{panel.department?.name ? ` (${panel.department.name})` : ''}</Link>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </>
                   ) : (userRole === "admin" &&
                     <>
@@ -211,6 +220,9 @@ export function AuthLayout({ children }: AuthLayoutProps) {
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link href="/admin/recruiters">Recruiters</Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href="/admin/results">Results</Link>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -408,7 +420,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
                               </div>
                             )}
                             
-                            {recruiterPanels && recruiterPanels.length > 0 && (
+                            {isShortlistingDeadlineOver && recruiterPanels && recruiterPanels.length > 0 && (
                               <div className="space-y-1">
                                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Panels</h4>
                                 {recruiterPanels.map((panel: any) => (

@@ -232,3 +232,8 @@ For support and questions:
 ---
 
 **WEB DEV DEPT**
+
+
+todo:
+confirm 1 - 1 relation for panel time slot and applicant
+notification panel

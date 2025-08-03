@@ -54,6 +54,7 @@ import {
   AlertCircle,
   Clock,
   UserMinus,
+  XCircle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -316,6 +317,16 @@ export default function DepartmentPage() {
   const now = new Date();
   const canShortlist = applicationDeadline && shortlistDeadline && now > applicationDeadline && now < shortlistDeadline;
   const canPanel = shortlistDeadline && now > shortlistDeadline;
+  
+  // Determine current phase
+  const getCurrentPhase = () => {
+    if (!applicationDeadline || !shortlistDeadline) return 'unknown';
+    if (now < applicationDeadline) return 'application';
+    if (now < shortlistDeadline) return 'shortlisting';
+    return 'interview';
+  };
+  
+  const currentPhase = getCurrentPhase();
 
   const handleStatusUpdate = async (
     applicationId: string,
@@ -369,20 +380,18 @@ export default function DepartmentPage() {
             Shortlisted
           </Badge>
         );
-      case "waitlisted":
-        return (
-          <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">
-            Waitlisted
-          </Badge>
-        );
-      case "rejected":
+
+      case "not_selected":
         return <Badge variant="destructive">Rejected</Badge>;
+
       case "accepted":
         return (
           <Badge className="bg-green-500 hover:bg-green-600 text-white">
             Accepted
           </Badge>
         );
+      case "rejected":
+        return <Badge variant="destructive">Rejected</Badge>;
       default:
         return <Badge variant="secondary">Pending</Badge>;
     }
@@ -414,8 +423,12 @@ export default function DepartmentPage() {
     shortlistedCount: applicants.filter(
       (app) => getOverallApplicationStatus(app) === "shortlisted"
     ).length,
-    waitlistedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "waitlisted"
+
+    notSelectedCount: applicants.filter(
+      (app) => getOverallApplicationStatus(app) === "not_selected"
+    ).length,
+    acceptedCount: applicants.filter(
+      (app) => getOverallApplicationStatus(app) === "accepted"
     ).length,
     rejectedCount: applicants.filter(
       (app) => getOverallApplicationStatus(app) === "rejected"
@@ -522,6 +535,20 @@ export default function DepartmentPage() {
                 <p className="text-sm sm:text-base text-muted-foreground">
                   Manage applications for this department
                 </p>
+                {currentPhase !== 'unknown' && (
+                  <div className="mt-2">
+                    <Badge 
+                      variant={currentPhase === 'application' ? 'secondary' : currentPhase === 'shortlisting' ? 'default' : 'outline'}
+                      className={currentPhase === 'application' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 
+                               currentPhase === 'shortlisting' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                               'bg-green-500/20 text-green-400 border-green-500/30'}
+                    >
+                      {currentPhase === 'application' ? 'Application Phase' : 
+                       currentPhase === 'shortlisting' ? 'Shortlisting Phase' : 
+                       'Interview Phase'}
+                    </Badge>
+                  </div>
+                )}
               </div>
               {/* Role indicator */}
               <div className="flex items-center justify-center sm:justify-end gap-2">
@@ -598,6 +625,54 @@ export default function DepartmentPage() {
                 </div>
               </div>
             </div>
+
+            {currentPhase === 'shortlisting' && (
+              <div className="stats-card">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Not Selected</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {departmentStats.notSelectedCount}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-full bg-red-500/20 border border-red-500/50">
+                    <XCircle className="h-5 w-5 text-red-400" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentPhase === 'interview' && (
+              <>
+                <div className="stats-card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Accepted</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {departmentStats.acceptedCount}
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-full bg-green-500/20 border border-green-500/50">
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="stats-card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Rejected</p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {departmentStats.rejectedCount}
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-full bg-red-500/20 border border-red-500/50">
+                      <XCircle className="h-5 w-5 text-red-400" />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {canPanel && (
@@ -681,6 +756,16 @@ export default function DepartmentPage() {
                   <CardDescription className="text-sm sm:text-base">
                     Review and manage department applications
                   </CardDescription>
+                  {currentPhase !== 'unknown' && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {currentPhase === 'application' && 
+                        "Showing all applicants. Shortlisting will begin after the application deadline."}
+                      {currentPhase === 'shortlisting' && 
+                        "Showing all applicants for shortlisting management."}
+                      {currentPhase === 'interview' && 
+                        "Showing shortlisted applicants and final results (accepted/rejected)."}
+                    </div>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -718,8 +803,15 @@ export default function DepartmentPage() {
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="shortlisted">Shortlisted</SelectItem>
-                      <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
+                      {currentPhase === 'shortlisting' && (
+                        <SelectItem value="not_selected">Rejected</SelectItem>
+                      )}
+                      {currentPhase === 'interview' && (
+                        <>
+                          <SelectItem value="accepted">Accepted</SelectItem>
+                          <SelectItem value="rejected">Rejected</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -797,59 +889,102 @@ export default function DepartmentPage() {
                               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-border gap-3">
                                 {canShortlist && (
                                   <div className="flex flex-wrap gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleStatusUpdate(
-                                          applicant.id,
-                                          "shortlisted",
-                                          preferenceType
-                                        )
-                                      }
-                                      disabled={
-                                        currentStatus === "shortlisted" ||
-                                        isUpdating
-                                      }
-                                      className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 text-xs sm:text-sm"
-                                    >
-                                      Shortlist
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleStatusUpdate(
-                                          applicant.id,
-                                          "waitlisted",
-                                          preferenceType
-                                        )
-                                      }
-                                      disabled={
-                                        currentStatus === "waitlisted" ||
-                                        isUpdating
-                                      }
-                                      className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/20 text-xs sm:text-sm"
-                                    >
-                                      Waitlist
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleStatusUpdate(
-                                          applicant.id,
-                                          "rejected",
-                                          preferenceType
-                                        )
-                                      }
-                                      disabled={
-                                        currentStatus === "rejected" || isUpdating
-                                      }
-                                      className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs sm:text-sm"
-                                    >
-                                      Reject
-                                    </Button>
+                                    {currentPhase === 'shortlisting' ? (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleStatusUpdate(
+                                              applicant.id,
+                                              "shortlisted",
+                                              preferenceType
+                                            )
+                                          }
+                                          disabled={
+                                            currentStatus === "shortlisted" ||
+                                            isUpdating
+                                          }
+                                          className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 text-xs sm:text-sm"
+                                        >
+                                          Shortlist
+                                        </Button>
+
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleStatusUpdate(
+                                              applicant.id,
+                                              "not_selected",
+                                              preferenceType
+                                            )
+                                          }
+                                          disabled={
+                                            currentStatus === "not_selected" || isUpdating
+                                          }
+                                          className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs sm:text-sm"
+                                        >
+                                          Reject
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleStatusUpdate(
+                                              applicant.id,
+                                              "pending",
+                                              preferenceType
+                                            )
+                                          }
+                                          disabled={
+                                            currentStatus === "pending" || isUpdating
+                                          }
+                                          className="border-gray-500 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-950/20 text-xs sm:text-sm"
+                                        >
+                                          Reset
+                                        </Button>
+                                      </>
+                                    ) : currentPhase === 'interview' && currentStatus === 'shortlisted' ? (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleStatusUpdate(
+                                              applicant.id,
+                                              "accepted",
+                                              preferenceType
+                                            )
+                                          }
+                                          disabled={
+                                            currentStatus === "accepted" as any ||
+                                            isUpdating
+                                          }
+                                          className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20 text-xs sm:text-sm"
+                                        >
+                                          Accept
+                                        </Button>
+
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleStatusUpdate(
+                                              applicant.id,
+                                              "rejected",
+                                              preferenceType
+                                            )
+                                          }
+                                          disabled={
+                                            currentStatus === "rejected" as any || isUpdating
+                                          }
+                                          className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs sm:text-sm"
+                                        >
+                                          Reject
+                                        </Button>
+                                      </>
+                                    ) : null}
                                   </div>
                                 )}
                                 <div className="flex flex-wrap gap-2 items-center">
@@ -874,11 +1009,10 @@ export default function DepartmentPage() {
                                           variant="outline" 
                                           className={`text-xs ${getAverageScoreBadge(applicantAverages[applicant.id]!.average)}`}
                                         >
-                                          <Star className="h-3 w-3 mr-1" />
-                                          {applicantAverages[applicant.id]?.average}
-                                          <span className="ml-1 opacity-70">
+                                          Average: {applicantAverages[applicant.id]?.average}
+                                          {/* <span className="ml-1 opacity-70">
                                             ({applicantAverages[applicant.id]?.totalEvaluators})
-                                          </span>
+                                          </span> */}
                                         </Badge>
                                       )}
                                     </div>
@@ -1577,24 +1711,7 @@ export default function DepartmentPage() {
                     >
                       Shortlist
                     </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        if (selectedApplicant) {
-                          const preferenceType =
-                            getPreferenceType(selectedApplicant);
-                          handleStatusUpdate(
-                            selectedApplicant.id,
-                            "waitlisted",
-                            preferenceType
-                          );
-                        }
-                      }}
-                      disabled={isUpdating}
-                      className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                    >
-                      Waitlist
-                    </Button>
+
                     <Button
                       variant="destructive"
                       onClick={() => {
@@ -1612,6 +1729,25 @@ export default function DepartmentPage() {
                     >
                       Reject
                     </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (selectedApplicant) {
+                          const preferenceType =
+                            getPreferenceType(selectedApplicant);
+                          handleStatusUpdate(
+                            selectedApplicant.id,
+                            "pending",
+                            preferenceType
+                          );
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="border-gray-500 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-950/20"
+                    >
+                      Reset
+                    </Button>
+
                   </div>
                 )}
               </DialogFooter>

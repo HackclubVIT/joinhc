@@ -11,17 +11,17 @@ export type Application = {
   first_pref_status:
     | "pending"
     | "shortlisted"
-    | "waitlisted"
-    | "rejected"
-    | "accepted";
+    | "not_selected"
+    | "accepted"
+    | "rejected";
   second_pref_dept_id: string;
   second_pref_reason: string;
   second_pref_status:
     | "pending"
     | "shortlisted"
-    | "waitlisted"
-    | "rejected"
-    | "accepted";
+    | "not_selected"
+    | "accepted"
+    | "rejected";
   priority_reason: string;
   portfolio_link: string | null;
   created_at: string;
@@ -175,8 +175,8 @@ export async function saveApplication(applicationData: {
   second_pref_reason: string;
   priority_reason: string;
   portfolio_link?: string;
-  first_pref_status?: "pending" | "shortlisted" | "waitlisted" | "rejected" | "accepted";
-  second_pref_status?: "pending" | "shortlisted" | "waitlisted" | "rejected" | "accepted";
+  first_pref_status?: "pending" | "shortlisted" | "not_selected" | "accepted" | "rejected";
+  second_pref_status?: "pending" | "shortlisted" | "not_selected" | "accepted" | "rejected";
 }) {
   const supabase = createClient();
 
@@ -636,7 +636,7 @@ export async function getShortlistDeadline() {
 
 export function getOverallApplicationStatus(
   application: Application
-): "pending" | "shortlisted" | "waitlisted" | "rejected" | "accepted" {
+): "pending" | "shortlisted" | "rejected" | "accepted" | "not_selected" {
   
 
   if (
@@ -654,19 +654,21 @@ export function getOverallApplicationStatus(
   }
 
   
-  if (
-    application.first_pref_status === "waitlisted" ||
-    application.second_pref_status === "waitlisted"
-  ) {
-    return "waitlisted";
-  }
+
 
   
   if (
-    application.first_pref_status === "rejected" &&
+    application.first_pref_status === "rejected" ||
     application.second_pref_status === "rejected"
   ) {
     return "rejected";
+  }
+
+  if (
+    application.first_pref_status === "not_selected" &&
+    application.second_pref_status === "not_selected"
+  ) {
+    return "not_selected";
   }
 
   
@@ -683,6 +685,12 @@ export function getPreferenceSelectionInfo(application: Application): {
 
   const firstShortlisted = application.first_pref_status === "shortlisted";
   const secondShortlisted = application.second_pref_status === "shortlisted";
+
+  const firstNotSelected = application.first_pref_status === "not_selected";
+  const secondNotSelected = application.second_pref_status === "not_selected";
+
+  const firstRejected = application.first_pref_status === "rejected";
+  const secondRejected = application.second_pref_status === "rejected";
 
   if (firstAccepted && secondAccepted) {
     return { type: "both", status: "accepted" };
@@ -705,12 +713,29 @@ export function getPreferenceSelectionInfo(application: Application): {
   if (secondShortlisted) {
     return { type: "second", status: "shortlisted" };
   }
-  if (application.first_pref_status === "waitlisted") {
-    return { type: "first", status: "waitlisted" };
+
+  if (firstRejected && secondRejected) {
+    return { type: "both", status: "rejected" };
   }
-  if (application.second_pref_status === "waitlisted") {
-    return { type: "second", status: "waitlisted" };
+
+  if (firstRejected) {
+    return { type: "first", status: "rejected" };
   }
+  if (secondRejected) {
+    return { type: "second", status: "rejected" };
+  }
+
+  if (firstNotSelected && secondNotSelected) {
+    return { type: "both", status: "not_selected" };
+  }
+
+  if (firstNotSelected) {
+    return { type: "first", status: "not_selected" };
+  }
+  if (secondNotSelected) {
+    return { type: "second", status: "not_selected" };
+  }
+
   return { type: null, status: "pending" };
 }
 
@@ -1128,7 +1153,6 @@ export async function updateOrCreateApplicantMark(
 
   try {
     const userId = (await supabase.auth.getUser()).data.user?.id;
-    console.log(userId);
     const { data, error } = await supabase
       .from("evaluations")
       .select()
@@ -1504,11 +1528,42 @@ export async function getDepartmentApplicants(departmentId: string) {
   }
 
   try {
+    
+    const [appDeadline, shortlistDeadline] = await Promise.all([
+      getApplicationDeadline(),
+      getShortlistDeadline(),
+    ]);
+
+    const now = new Date();
+    const appDeadlineDate = appDeadline?.deadline ? new Date(appDeadline.deadline) : null;
+    const shortlistDeadlineDate = shortlistDeadline?.deadline ? new Date(shortlistDeadline.deadline) : null;
+
+    let statusFilter: string[] = [];
+
+    if (appDeadlineDate && shortlistDeadlineDate) {
+      if (now < appDeadlineDate) {
+        
+        statusFilter = ['pending', 'shortlisted', 'not_selected', 'accepted', 'rejected'];
+      } else if (now < shortlistDeadlineDate) {
+        
+        statusFilter = ['pending', 'shortlisted', 'not_selected', 'accepted', 'rejected'];
+      } else {
+        
+        statusFilter = ['shortlisted', 'accepted', 'rejected'];
+      }
+    } else {
+      
+      statusFilter = ['pending', 'shortlisted', 'not_selected', 'accepted', 'rejected'];
+    }
+
     const { data, error } = await supabase
       .from("applications")
       .select("*")
       .or(
         `first_pref_dept_id.eq.${normalizedId},second_pref_dept_id.eq.${normalizedId}`
+      )
+      .or(
+        `first_pref_status.in.(${statusFilter.join(',')}),second_pref_status.in.(${statusFilter.join(',')})`
       )
       .order("created_at", { ascending: false });
 
@@ -1638,6 +1693,47 @@ export async function getPanelTimeSlots(panelId: string): Promise<PanelTimeSlot[
   return data;
 }
 
+export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promise<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string })[]> {
+  const supabase = createClient();
+  
+  
+  const { data: slots, error: slotsError } = await supabase
+    .from('panel_time_slots')
+    .select('*')
+    .eq('panel_id', panelId)
+    .order('start_time');
+  if (slotsError) throw slotsError;
+  
+  
+  const { data: bookings, error: bookingsError } = await supabase
+    .from('applicant_time_slot')
+    .select('time_slot_id, applicant_id')
+    .eq('panel_id', panelId);
+  if (bookingsError) throw bookingsError;
+  
+  
+  const bookedSlots = new Map(bookings.map((b: any) => [b.time_slot_id, b.applicant_id]));
+  
+  
+  return slots.map((slot: any) => ({
+    ...slot,
+    isBooked: bookedSlots.has(slot.id),
+    bookedBy: bookedSlots.get(slot.id) || undefined
+  }));
+}
+
+export async function isTimeSlotAvailable(timeSlotId: string): Promise<boolean> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('applicant_time_slot')
+    .select('id')
+    .eq('time_slot_id', timeSlotId)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return !data; 
+}
+
 export async function createPanelTimeSlot(panelId: string, start_time: string, end_time: string): Promise<PanelTimeSlot> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -1711,9 +1807,29 @@ export async function getApplicantTimeSlot(applicantId: string, panelId: string)
 export async function bookApplicantTimeSlot(applicantId: string, panelId: string, timeSlotId: string): Promise<ApplicantTimeSlot> {
   const supabase = createClient();
   
+  
+  const isAvailable = await isTimeSlotAvailable(timeSlotId);
+  if (!isAvailable) {
+    throw new Error('Time slot is already booked');
+  }
+  
+  
+  const { data: existingBooking, error: checkError } = await supabase
+    .from('applicant_time_slot')
+    .select('id')
+    .eq('applicant_id', applicantId)
+    .eq('panel_id', panelId)
+    .single();
+  
+  if (checkError && checkError.code !== 'PGRST116') throw checkError;
+  
+  if (existingBooking) {
+    throw new Error('Applicant already has a booking for this panel');
+  }
+  
   const { data, error } = await supabase
     .from('applicant_time_slot')
-    .upsert({ applicant_id: applicantId, panel_id: panelId, time_slot_id: timeSlotId, updated_at: new Date().toISOString() }, { onConflict: 'applicant_id,panel_id' })
+    .insert({ applicant_id: applicantId, panel_id: panelId, time_slot_id: timeSlotId, updated_at: new Date().toISOString() })
     .select()
     .single();
   if (error) throw error;
@@ -1737,7 +1853,148 @@ export async function updateApplicationDeadline(deadlineName: string, newDeadlin
     .from('application_settings')
     .update({ deadline: newDeadline, updated_at: new Date().toISOString() })
     .eq('deadline_name', deadlineName);
-  console.log("abc")
   if (error) throw error;
   return true;
+}
+
+export async function getResultsPublicationDeadline() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('application_settings')
+    .select('deadline')
+    .eq('deadline_name', 'results_publication')
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data?.deadline ? new Date(data.deadline) : null;
+}
+
+export async function publishResults() {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('application_settings')
+    .update({ 
+      deadline: new Date().toISOString(), 
+      updated_at: new Date().toISOString() 
+    })
+    .eq('deadline_name', 'results_publication');
+  
+  if (error) throw error;
+  return true;
+}
+
+export async function isApplicantAssignedToPanel(applicantId: string, preference: 'first' | 'second'): Promise<boolean> {
+  const supabase = createClient();
+  
+  const { data: application, error } = await supabase
+    .from('applications')
+    .select('first_pref_panel_id, second_pref_panel_id')
+    .eq('applicant_id', applicantId)
+    .single();
+    
+  if (error) {
+    console.error('Error checking panel assignment:', error);
+    return false;
+  }
+  
+  if (preference === 'first') {
+    return !!application?.first_pref_panel_id;
+  } else {
+    return !!application?.second_pref_panel_id;
+  }
+}
+
+export async function isApplicantEvaluated(applicationId: string, departmentId: string): Promise<boolean> {
+  const supabase = createClient();
+  
+  try {
+    const { data: evaluations, error } = await supabase
+      .from('evaluations')
+      .select('id')
+      .eq('application_id', applicationId)
+      .eq('department_id', departmentId);
+
+    if (error) {
+      console.error('Error checking applicant evaluation:', error);
+      return false;
+    }
+
+    
+    return evaluations && evaluations.length > 0;
+  } catch (error) {
+    console.error('Error checking applicant evaluation:', error);
+    return false;
+  }
+}
+
+export async function getShortlistedApplicantsForExport() {
+  const supabase = createClient();
+  try {
+    const { data: applications, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        first_pref_dept:departments!applications_first_pref_dept_id_fkey(name),
+        second_pref_dept:departments!applications_second_pref_dept_id_fkey(name)
+      `)
+      .or('first_pref_status.eq.shortlisted,second_pref_status.eq.shortlisted');
+
+    if (error) {
+      console.error('Error fetching shortlisted applicants:', error);
+      throw error;
+    }
+
+    return applications || [];
+  } catch (error) {
+    console.error('Error in getShortlistedApplicantsForExport:', error);
+    throw error;
+  }
+}
+
+export async function getAcceptedApplicantsForExport() {
+  const supabase = createClient();
+  try {
+    const { data: applications, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        first_pref_dept:departments!applications_first_pref_dept_id_fkey(name),
+        second_pref_dept:departments!applications_second_pref_dept_id_fkey(name)
+      `)
+      .or('first_pref_status.eq.accepted,second_pref_status.eq.accepted');
+
+    if (error) {
+      console.error('Error fetching accepted applicants:', error);
+      throw error;
+    }
+
+    return applications || [];
+  } catch (error) {
+    console.error('Error in getAcceptedApplicantsForExport:', error);
+    throw error;
+  }
+}
+
+export async function getPendingApplicantsForExport() {
+  const supabase = createClient();
+  try {
+    const { data: applications, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        first_pref_dept:departments!applications_first_pref_dept_id_fkey(name),
+        second_pref_dept:departments!applications_second_pref_dept_id_fkey(name)
+      `)
+      .or('first_pref_status.eq.pending,second_pref_status.eq.pending');
+
+    if (error) {
+      console.error('Error fetching pending applicants:', error);
+      throw error;
+    }
+
+    return applications || [];
+  } catch (error) {
+    console.error('Error in getPendingApplicantsForExport:', error);
+    throw error;
+  }
 }

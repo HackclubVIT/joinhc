@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Session, User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
+import { useToast } from "@/hooks/use-toast"
 
 type UserRole = "applicant" | "recruiter" | "admin"
 
@@ -22,19 +23,135 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+
+const detectBrowser = () => {
+  if (typeof window === 'undefined') return { isFirefox: false, isChrome: false, isEdge: false, isBrave: false }
+  
+  const userAgent = navigator.userAgent.toLowerCase()
+  
+  return {
+    isFirefox: /firefox/.test(userAgent),
+    isChrome: /chrome/.test(userAgent) && !/edge/.test(userAgent),
+    isEdge: /edge/.test(userAgent),
+    isBrave: /brave/.test(userAgent) || (navigator as any).brave?.isBrave?.() === true
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const { toast } = useToast()
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [userRole, setUserRole] = useState<UserRole | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isInitialized, setIsInitialized] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
+  const [isForceLoggingOut, setIsForceLoggingOut] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
     setIsHydrated(true)
+    
+    
+    setIsForceLoggingOut(false)
+    
+    
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      const browser = detectBrowser()
+      if (!browser.isFirefox) {
+        
+        localStorage.setItem('pageRefreshed', 'true')
+      }
+    }
+    
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
   }, [])
+
+  
+  useEffect(() => {
+    if (!isHydrated) return
+
+    const browser = detectBrowser()
+
+    if (!browser.isFirefox) {
+      
+      const isRefresh = localStorage.getItem('pageRefreshed') === 'true'
+      
+      if (isRefresh) {
+        
+        const currentPath = window.location.pathname
+        const isAuthenticatedPage = currentPath.startsWith('/dashboard') || 
+                                   currentPath.startsWith('/admin') || 
+                                   currentPath.startsWith('/application') ||
+                                   currentPath.startsWith('/profile')
+        
+        if (isAuthenticatedPage) {
+          
+          setIsForceLoggingOut(true)
+          
+          setSession(null)
+          setUser(null)
+          setUserRole(null)
+          setIsLoading(false)
+          setIsInitialized(true)
+          
+          const forceLogout = async () => {
+            try {
+              await supabase.auth.signOut()
+              
+              
+              toast({
+                title: "Logged Out Due to Browser Issue",
+                description: "Due to a technical error, Chromium based browsers log out users on refresh. Please use Firefox for a better experience.",
+                variant: "destructive",
+                duration: 10000, 
+              })
+              
+              setTimeout(() => {
+                router.push('/login')
+              }, 500)
+              
+            } catch (error) {
+              console.error("Force logout error:", error)
+              
+              
+              toast({
+                title: "Logged Out Due to Browser Issue",
+                description: "Due to a technical error, Chrome/Edge browsers log out users on refresh. Please use Firefox for a better experience.",
+                variant: "destructive",
+                duration: 8000, 
+              })
+              
+              setTimeout(() => {
+                router.push('/login')
+              }, 500)
+            }
+          }
+
+          forceLogout()
+        }
+      } else {
+        
+        localStorage.removeItem('pageRefreshed')
+      }
+    }
+  }, [isHydrated, router])
+
+  
+  useEffect(() => {
+    if (!isHydrated) return
+    
+    const currentPath = window.location.pathname
+    if (currentPath === '/login' || currentPath === '/register') {
+      
+      setIsForceLoggingOut(false)
+      localStorage.removeItem('pageRefreshed')
+    }
+  }, [isHydrated, router])
 
   const fetchUserRole = async (userId: string, retries = 0): Promise<UserRole> => {
     try {
@@ -45,9 +162,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single()
 
       if (error) {
-        console.error("Error fetching user role:", error)
         if (retries < 3) {
-          // Retry with exponential backoff
+          
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000))
           return fetchUserRole(userId, retries + 1)
         }
@@ -57,12 +173,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const role = data?.role || "applicant"
       setUserRole(role)
-      console.log("User role fetched:", role)
       return role
     } catch (err) {
-      console.error("Error in fetchUserRole:", err)
       if (retries < 3) {
-        // Retry with exponential backoff
+        
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000))
         return fetchUserRole(userId, retries + 1)
       }
@@ -76,15 +190,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchUserRole(user.id)
   }
 
-  // Initialize auth state
+  
   useEffect(() => {
     if (!isHydrated) return
+    
+    
+    if (isForceLoggingOut) {
+      
+      setIsLoading(false)
+      setIsInitialized(true)
+      return
+    }
 
     let mounted = true
 
     const initializeAuth = async () => {
       try {
-        // Get initial session
+        
+        
         const { data: { session }, error } = await supabase.auth.getSession()
 
         if (!mounted) return
@@ -97,11 +220,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (session) {
+          
           setSession(session)
           setUser(session.user)
-          if (!userRole) {
-            await fetchUserRole(session.user.id)
-          }
+          
+          await fetchUserRole(session.user.id)
+          
+          
+          setIsForceLoggingOut(false)
+          localStorage.removeItem('pageRefreshed')
+        } else {
+          
         }
 
         setIsLoading(false)
@@ -117,23 +246,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initializeAuth()
 
-    // Listen for auth changes
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return
         
-        console.log("Auth state change:", event, session?.user?.id)
+        
         
         if (session) {
           setSession(session)
           setUser(session.user)
-          if (event === 'SIGNED_IN' && !userRole) {
+          if (event === 'SIGNED_IN') {
+            
+            
             const role = await fetchUserRole(session.user.id)
             const redirectPath = role === "recruiter" ? "/dashboard/recruiter" : 
                                 role === "admin" ? "/admin" : "/dashboard"
+            
             router.push(redirectPath)
+            
+            
+            localStorage.removeItem('pageRefreshed')
+            setIsForceLoggingOut(false)
           }
         } else {
+          
           setSession(null)
           setUser(null)
           setUserRole(null)
@@ -145,14 +282,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [router, isHydrated, userRole])
+  }, [router, isHydrated, isForceLoggingOut])
 
   const signIn = async (email: string, password: string) => {
     try {
+      
+      
+      setIsForceLoggingOut(false)
+      localStorage.removeItem('pageRefreshed')
+      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
+      
+      if (error) {
+        
+      } else {
+        
+      }
+      
       return { error }
     } catch (err) {
       console.error("Error in signIn:", err)
@@ -194,8 +343,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setSession(null)
       setUserRole(null)
-      await supabase.auth.signOut()
+      
       router.push("/")
+      localStorage.removeItem('pageRefreshed')
+      await supabase.auth.signOut()
     } catch (err) {
       console.error("Error in signOut:", err)
     }

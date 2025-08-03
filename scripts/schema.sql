@@ -273,8 +273,8 @@ CREATE TABLE IF NOT EXISTS "public"."applications" (
     "second_pref_status" "text" DEFAULT 'pending'::"text",
     "first_pref_panel_id" "uuid",
     "second_pref_panel_id" "uuid",
-    CONSTRAINT "applications_first_pref_status_check" CHECK (("first_pref_status" = ANY (ARRAY['pending'::"text", 'shortlisted'::"text", 'waitlisted'::"text", 'rejected'::"text", 'accepted'::"text"]))),
-    CONSTRAINT "applications_second_pref_status_check" CHECK (("second_pref_status" = ANY (ARRAY['pending'::"text", 'shortlisted'::"text", 'waitlisted'::"text", 'rejected'::"text", 'accepted'::"text"])))
+    CONSTRAINT "applications_first_pref_status_check" CHECK (("first_pref_status" = ANY (ARRAY['pending'::"text", 'shortlisted'::"text", 'not_selected'::"text", 'accepted'::"text", 'rejected'::"text"]))),
+    CONSTRAINT "applications_second_pref_status_check" CHECK (("second_pref_status" = ANY (ARRAY['pending'::"text", 'shortlisted'::"text", 'not_selected'::"text", 'accepted'::"text", 'rejected'::"text"])))
 );
 
 
