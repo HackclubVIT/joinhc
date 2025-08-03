@@ -35,7 +35,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
 
-  const { signIn } = useAuth();
+  const { signIn, isLoading: authLoading, isInitialized } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetEmail, setResetEmail] = useState("");
@@ -49,6 +49,12 @@ function LoginContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (authLoading || !isInitialized) {
+      setError("Please wait for authentication to initialize...");
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -57,6 +63,10 @@ function LoginContent() {
     if (error) {
       setError(error.message);
       setIsLoading(false);
+    } else {
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 5000);
     }
   };
 
@@ -172,6 +182,12 @@ function LoginContent() {
             </Alert>
           )}
 
+          {authLoading && (
+            <Alert>
+              <AlertDescription>Initializing authentication...</AlertDescription>
+            </Alert>
+          )}
+
           {/* Login Card */}
           <div className="hackclub-card">
             <div className="p-4 sm:p-6 space-y-1 border-b border-border">
@@ -204,7 +220,7 @@ function LoginContent() {
                       onChange={(e) => setEmail(e.target.value)}
                       className="pl-10 h-10 sm:h-12 bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                       required
-                      disabled={isLoading}
+                      disabled={isLoading || authLoading}
                     />
                   </div>
                 </div>
@@ -226,7 +242,7 @@ function LoginContent() {
                       onChange={(e) => setPassword(e.target.value)}
                       className="pl-10 pr-12 h-10 sm:h-12 bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
                       required
-                      disabled={isLoading}
+                      disabled={isLoading || authLoading}
                     />
                     <Button
                       type="button"
@@ -307,12 +323,17 @@ function LoginContent() {
                 <Button
                   type="submit"
                   className="w-full h-10 sm:h-12 hackclub-button text-sm sm:text-base"
-                  disabled={isLoading}
+                  disabled={isLoading || authLoading}
                 >
                   {isLoading ? (
                     <div className="flex items-center space-x-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground border-t-transparent" />
                       <span>Signing in...</span>
+                    </div>
+                  ) : authLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground border-t-transparent" />
+                      <span>Initializing...</span>
                     </div>
                   ) : (
                     "Sign In"

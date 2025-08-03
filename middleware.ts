@@ -41,6 +41,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(redirectUrl)
       }
       
+      
       if (request.nextUrl.pathname.startsWith("/admin")) {
         try {
           const { data: profileData } = await supabase
@@ -50,7 +51,9 @@ export async function middleware(request: NextRequest) {
             .single()
           
           if (profileData?.role !== "admin") {
-            return NextResponse.redirect(new URL("/dashboard", request.url))
+            
+            const redirectPath = profileData?.role === "recruiter" ? "/dashboard/recruiter" : "/dashboard"
+            return NextResponse.redirect(new URL(redirectPath, request.url))
           }
         } catch (error) {
           console.error("Error checking admin role:", error)
@@ -58,8 +61,9 @@ export async function middleware(request: NextRequest) {
         }
       }
       
-      if(request.nextUrl.pathname.startsWith("/application")) {
-        try{
+      
+      if (request.nextUrl.pathname.startsWith("/application")) {
+        try {
           const { data: profileData } = await supabase
             .from("profiles")
             .select("role")
@@ -67,13 +71,17 @@ export async function middleware(request: NextRequest) {
             .single()
           
           if (profileData?.role !== "applicant") {
-            return NextResponse.redirect(new URL("/dashboard/recruiter", request.url))
+            
+            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard/recruiter"
+            return NextResponse.redirect(new URL(redirectPath, request.url))
           }
         } catch (error) {
-          console.error("Error checking role:", error)
+          console.error("Error checking applicant role:", error)
           return NextResponse.redirect(new URL("/dashboard", request.url))
         }
       }
+      
+      
       if (request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
         try {
           const { data: profileData } = await supabase
@@ -83,15 +91,37 @@ export async function middleware(request: NextRequest) {
             .single()
           
           if (profileData?.role !== "recruiter") {
-            return NextResponse.redirect(new URL("/dashboard", request.url))
+            
+            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard"
+            return NextResponse.redirect(new URL(redirectPath, request.url))
           }
         } catch (error) {
-          console.error("Error checking role:", error)
+          console.error("Error checking recruiter role:", error)
           return NextResponse.redirect(new URL("/dashboard", request.url))
+        }
+      }
+      
+      
+      if (request.nextUrl.pathname === "/dashboard" && !request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          
+          if (profileData?.role !== "applicant") {
+            
+            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard/recruiter"
+            return NextResponse.redirect(new URL(redirectPath, request.url))
+          }
+        } catch (error) {
+          console.error("Error checking applicant dashboard role:", error)
         }
       }
     }
 
+    
     if (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register") {
       if (user) {
         try {
@@ -102,15 +132,23 @@ export async function middleware(request: NextRequest) {
             .single()
           
           const role = profileData?.role;
-          const redirectPath = role === "recruiter" ? "/dashboard/recruiter" : "/dashboard"
+          let redirectPath = "/dashboard"
+          
+          if (role === "admin") {
+            redirectPath = "/admin"
+          } else if (role === "recruiter") {
+            redirectPath = "/dashboard/recruiter"
+          }
+          
           return NextResponse.redirect(new URL(redirectPath, request.url))
         } catch (error) {
-          console.error("Error checking role:", error)
+          console.error("Error checking role for auth redirect:", error)
           return NextResponse.redirect(new URL("/dashboard", request.url))
         }
       }
     }
 
+    
     if (request.nextUrl.pathname === "/dashboard" && user) {
       try {
         const { data: profileData } = await supabase

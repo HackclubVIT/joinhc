@@ -111,6 +111,10 @@ export default function AdminDashboard() {
           <h2 className="text-lg sm:text-xl font-semibold mb-2">Recruiters</h2>
           <p className="text-sm sm:text-base">View all recruiters, assign recruiters to departments.</p>
         </Link>
+        <Link href="/admin/results" className="block p-4 sm:p-6 rounded-lg border hover:bg-muted transition">
+          <h2 className="text-lg sm:text-xl font-semibold mb-2">Results</h2>
+          <p className="text-sm sm:text-base">View and manage results.</p>
+        </Link>
       </div>
     </div>
   );

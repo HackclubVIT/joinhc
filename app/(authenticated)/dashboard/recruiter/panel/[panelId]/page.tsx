@@ -18,7 +18,7 @@ import {
   getPanelData,
   updateMeetLink,
   updateOrCreateApplicantMark,
-  getPanelTimeSlots,
+  getPanelTimeSlotsWithBookingStatus,
   createPanelTimeSlot,
   updatePanelTimeSlot,
   deletePanelTimeSlot,
@@ -81,7 +81,7 @@ export default function PanelPage() {
   const [meetLink, setMeetLink] = useState<string>("");
   const [meetLinkEditable, setMeetLinkEditable] = useState(false);
   const [isTimeSlotDialogOpen, setIsTimeSlotDialogOpen] = useState(false);
-  const [timeSlots, setTimeSlots] = useState<PanelTimeSlot[]>([]);
+  const [timeSlots, setTimeSlots] = useState<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string })[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotForm, setSlotForm] = useState({ start: "", end: "" });
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function PanelPage() {
   const fetchTimeSlots = async () => {
     setLoadingSlots(true);
     try {
-      const slots = await getPanelTimeSlots(panelId);
+      const slots = await getPanelTimeSlotsWithBookingStatus(panelId);
       setTimeSlots(slots);
     } catch (e) {
       setSlotError("Failed to load time slots");
@@ -663,7 +663,13 @@ export default function PanelPage() {
                         <TableRow key={slot.id}>
                           <TableCell className="text-xs sm:text-sm">{format(new Date(slot.start_time), "yyyy-MM-dd HH:mm")}</TableCell>
                           <TableCell className="text-xs sm:text-sm">{format(new Date(slot.end_time), "yyyy-MM-dd HH:mm")}</TableCell>
-                          <TableCell className="text-xs sm:text-sm">{/* TODO: Show booked/available status */}Available</TableCell>
+                          <TableCell className="text-xs sm:text-sm">
+                            {slot.isBooked ? (
+                              <span className="text-red-600 font-medium">Booked</span>
+                            ) : (
+                              <span className="text-green-600 font-medium">Available</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-xs sm:text-sm">
                             {editingSlotId === slot.id ? (
                               <>

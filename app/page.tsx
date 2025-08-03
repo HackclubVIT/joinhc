@@ -13,6 +13,7 @@ import {
   Award,
 } from "lucide-react";
 import { HackClubLogo } from "@/components/hackclub-logo";
+import { FirefoxSuggestion } from "@/components/firefox-suggestion";
 
 export default function Home() {
   return (
@@ -24,7 +25,7 @@ export default function Home() {
             <div className="flex items-center gap-4 pt-8">
               <Link href="/login">
                 <Button className="premium-button">
-                  SignIn/SignUp <ArrowRight className="ml-2 h-4 w-4" />
+                  SignIn / SignUp <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
@@ -53,7 +54,6 @@ export default function Home() {
 
               {/* Hero Content */}
               <div className="space-y-8">
-
                 <h1 className="hero-title">
                   Build the{" "}
                   <span className="gradient-text-secondary">Future</span> of
@@ -245,6 +245,9 @@ export default function Home() {
           </div>
         </div>
       </footer>
+      
+      {/* Firefox Suggestion Toast */}
+      <FirefoxSuggestion />
     </div>
   );
 }
