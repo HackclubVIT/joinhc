@@ -344,9 +344,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null)
       setUserRole(null)
       
-      router.push("/")
       localStorage.removeItem('pageRefreshed')
       await supabase.auth.signOut()
+      router.push("/")
     } catch (err) {
       console.error("Error in signOut:", err)
     }
