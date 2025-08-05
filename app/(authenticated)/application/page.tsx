@@ -445,7 +445,7 @@ export default function ApplicationPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="reason_priority">
-                  Reason for Preference Priority
+                  Why do you wanna join Hackclub? (Explain what makes you a good fit for your preferred departments)
                 </Label>
                 <Textarea
                   id="reason_priority"
@@ -455,7 +455,7 @@ export default function ApplicationPage() {
                   rows={3}
                   required
                   disabled={deadlinePassed}
-                  placeholder="Explain why you prioritized your preferences in this order..."
+                  placeholder="Why should we recruit you..."
                 />
               </div>
             </CardContent>
