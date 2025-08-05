@@ -445,7 +445,7 @@ export default function ApplicationPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="reason_priority">
-                  Why do you wanna join Hackclub? (Explain what makes you a good fit for your preferred departments)
+                  Why Hackclub?(Explain what makes you a good fit for your preferred departments)
                 </Label>
                 <Textarea
                   id="reason_priority"
