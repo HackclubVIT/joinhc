@@ -176,7 +176,7 @@ export default function DepartmentPage() {
 
   useEffect(() => {
     if (panelMembers.length > 0) return;
-    // Fetch panel members only if they are not already fetched or if new panel is selected
+    
     fetchPanelMembers();
   }, [panelMembers]);
 
@@ -197,7 +197,7 @@ export default function DepartmentPage() {
 
   useEffect(() => {
     if (panels.length > 0) return;
-    // Fetch panels only if they are not already fetched or if new panel is added
+    
     const fetchPanels = async () => {
       try {
         const data = await getPanelByDepartment(deptId);
@@ -224,7 +224,7 @@ export default function DepartmentPage() {
         const data = await getDepartmentApplicants(deptId);
         setApplicants(data);
         
-        // Fetch average marks for all applicants
+        
         const averages: { [applicantId: string]: { average: number; totalEvaluators: number } | null } = {};
         
         for (const applicant of data) {
@@ -299,7 +299,7 @@ export default function DepartmentPage() {
     fetchDeadlines();
   }, []);
 
-  // Check if current user is a recruiter (not evaluator) for this department
+  
   useEffect(() => {
     const checkUserRole = async () => {
       try {
@@ -318,7 +318,7 @@ export default function DepartmentPage() {
   const canShortlist = applicationDeadline && shortlistDeadline && now > applicationDeadline && now < shortlistDeadline;
   const canPanel = shortlistDeadline && now > shortlistDeadline;
   
-  // Determine current phase
+  
   const getCurrentPhase = () => {
     if (!applicationDeadline || !shortlistDeadline) return 'unknown';
     if (now < applicationDeadline) return 'application';
@@ -401,7 +401,7 @@ export default function DepartmentPage() {
     return applicant.first_pref_dept_id === deptId ? "first" : "second";
   };
 
-  // Get color-coded badge for average score
+  
   const getAverageScoreBadge = (average: number) => {
     if (average >= 8) return "bg-green-100 text-green-800 border-green-200";
     if (average >= 6) return "bg-yellow-100 text-yellow-800 border-yellow-200";
@@ -452,7 +452,7 @@ export default function DepartmentPage() {
     fetchDeptNames();
   }, [selectedApplicant]);
 
-  // Fetch shortlisted applicants for the applicants tab
+  
   useEffect(() => {
     if (isPanelDialogOpen && panelDialogTab === 'applicants' && selectedPanel) {
       getShortlistedApplicantsWithAssignmentStatus(deptId, selectedPanel.id).then(setShortlistedApplicants);
@@ -482,7 +482,7 @@ export default function DepartmentPage() {
     setIsPanelDialogOpen(true);
   };
 
-  // Manual assign applicant to panel
+  
   const handleAssignApplicantToPanel = async (applicantId: string, preference: 'first' | 'second') => {
     if (!selectedPanel) return;
     try {
@@ -1219,7 +1219,7 @@ export default function DepartmentPage() {
                       </TableHeader>
                       <TableBody>
                               {shortlistedApplicants.map((a) => {
-                            // Show a row for each preference
+                            
                             const rows = [];
                             if (a.preference === 'first' || a.preference === 'both') {
                                   const isAssignedToThisPanel = a.first_pref_panel_id === selectedPanel?.id;
@@ -1402,13 +1402,12 @@ export default function DepartmentPage() {
                 <form
                   action={async (e) => {
                     const panelName = e.get("new_panel_name")?.toString();
-                    console.log("Creating panel with name:", panelName);
                     if (panelName) {
                       const data = await createPanel(panelName, deptId);
                       if (data) {
                         setIsNewPanelDialogOpen(false);
                         toast({ title: 'Success', description: 'New panel created successfully' });
-                        setPanels([]); // Clear panels to refetch
+                        setPanels([]); 
                       } else {
                         toast({ title: 'Error', description: 'Failed to create new panel', variant: 'destructive' });
                       }
