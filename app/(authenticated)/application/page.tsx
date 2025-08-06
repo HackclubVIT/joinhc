@@ -42,6 +42,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
+import { toast } from "@/hooks/use-toast";
 
 export default function ApplicationPage() {
   const router = useRouter();
@@ -224,14 +225,21 @@ export default function ApplicationPage() {
         second_pref_status: "pending",
       });
 
-      setSuccess(
-        existingApplication
-          ? "Application updated successfully!"
-          : "Application submitted successfully!",
-      );
+      const successMessage = existingApplication
+        ? "Application updated successfully!"
+        : "Application submitted successfully!";
+
+      setSuccess(successMessage);
+      
+      toast({
+        title: "Success!",
+        description: successMessage,
+        variant: "default",
+      });
+
       setTimeout(() => {
         router.push("/dashboard");
-      }, 2000);
+      }, 100);
     } catch (err: any) {
       setError(
         err.message || "Failed to submit application. Please try again.",
