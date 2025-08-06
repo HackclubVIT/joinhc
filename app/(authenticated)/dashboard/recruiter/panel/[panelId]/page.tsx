@@ -88,7 +88,7 @@ export default function PanelPage() {
   const [editForm, setEditForm] = useState({ start: "", end: "" });
   const [slotError, setSlotError] = useState<string | null>(null);
 
-  // Fetch time slots for this panel
+  
   const fetchTimeSlots = async () => {
     setLoadingSlots(true);
     try {
@@ -442,7 +442,6 @@ export default function PanelPage() {
                       document.getElementById("remark") as HTMLInputElement
                     ).value;
                     if (isNaN(score) || score < 1 || score > 10) {
-                      console.log("Marking applicant:", score, remark);
                       toast.error("Please enter a valid mark between 1 and 10");
                       return;
                     }

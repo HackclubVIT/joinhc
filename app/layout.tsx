@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: "Better Join Hackclub",
   description: "Hackclub Recruitment Portal",
   generator: "Next.js",
+  referrer: "no-referrer",
   icons: {
     icon: [
       {
@@ -76,6 +77,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="referrer" content="no-referrer" />
+      </head>
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"
@@ -83,7 +87,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </ThemeProvider>
         <Toaster />
       </body>
