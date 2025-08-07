@@ -85,7 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 })
 
                 localStorage.clear()
-                
                 sessionStorage.clear()
 
                 setUser(null)
@@ -95,7 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsInitialized(true)
 
                 supabase.auth.signOut().catch(() => {
+                  // Ignore errors since we're forcing logout anyway
                 })
+
                 toast({
                   title: "Logged Out Due to Browser Error",
                   description: "You have been logged out due to browser errors. Please use Firefox for a better experience.",
@@ -105,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 setTimeout(() => {
                   router.push('/login')
-                }, 1000)
+                }, 3000)
 
               } catch (error) {
                 console.error("Logout error:", error)
@@ -117,12 +118,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 })
                 setTimeout(() => {
                   router.push('/login')
-                }, 1000)
+                }, 2000)
               }
             }
             performImmediateLogout()
           }, 500)
-          return
         }
       }
     }

@@ -115,14 +115,14 @@ export async function getApplicationForUser() {
       `
       )
       .eq("applicant_id", user.id)
-      .single();
+      .limit(1);
 
-    if (error && error.code !== "PGRST116") {
+    if (error) {
       console.error("Error fetching application:", error);
       return null;
     }
 
-    return data;
+    return data && data.length > 0 ? data[0] : null;
   } catch (err) {
     console.error("Error in getApplicationForUser:", err);
     return null;
