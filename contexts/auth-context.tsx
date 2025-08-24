@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setIsHydrated(true)
     
-    
+    // Show Firefox recommendation toast for non-Firefox browsers
     const browser = detectBrowser()
     if (!browser.isFirefox) {
       toast({
@@ -56,11 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         variant: "default",
         duration: 6000,
       })
-      
-      
       const navigationEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
       const navigationType = navigationEntries[0]?.type
-      
       
       if (navigationType === 'reload') {
         const currentPath = window.location.pathname
@@ -68,33 +65,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                                    currentPath.startsWith('/admin') || 
                                    currentPath.startsWith('/application') ||
                                    currentPath.startsWith('/profile')
-        
-        
         if (isAuthenticatedPage) {
-          const performLogout = async () => {
-            try {
-              await supabase.auth.signOut()
-              
-              toast({
-                title: "Logged Out Due to Browser Limitation",
-                description: "Chromium-based browsers require logout on refresh for security. Please use Firefox for a better experience.",
-                variant: "destructive",
-                duration: 8000,
-              })
-              
-              setTimeout(() => {
-                router.push('/login')
-              }, 1500)
-              
-            } catch (error) {
-              console.error("Logout error:", error)
-              router.push('/login')
-            }
-          }
+          setTimeout(() => {
+            const performImmediateLogout = () => {
+              try {
+                const cookiesToClear = [
+                  'sb-access-token',
+                  'sb-refresh-token', 
+                  'supabase-auth-token',
+                  'supabase.auth.token',
+                  'sb-hhvnwxkgjgbwypwnvnrl-auth-token',
+                  'sb-hhvnwxkgjgbwypwnvnrl-auth-token.0',
+                  'sb-hhvnwxkgjgbwypwnvnrl-auth-token.1'
+                ]
+                
+                cookiesToClear.forEach(cookieName => {
+                  document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`
+                  document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+                })
 
-          
-          performLogout()
-          return 
+                localStorage.clear()
+                sessionStorage.clear()
+
+                setUser(null)
+                setSession(null)
+                setUserRole(null)
+                setIsLoading(false)
+                setIsInitialized(true)
+
+                supabase.auth.signOut().catch(() => {
+                  // Ignore errors since we're forcing logout anyway
+                })
+
+                toast({
+                  title: "Logged Out Due to Browser Error",
+                  description: "You have been logged out due to browser errors. Please use Firefox for a better experience.",
+                  variant: "destructive",
+                  duration: 8000,
+                })
+
+                setTimeout(() => {
+                  router.push('/login')
+                }, 3000)
+
+              } catch (error) {
+                console.error("Logout error:", error)
+                toast({
+                  title: "Session Expired", 
+                  description: "You have been logged out due to browser errors. Use Mozilla Firefox for better experience.",
+                  variant: "destructive",
+                  duration: 5000,
+                })
+                setTimeout(() => {
+                  router.push('/login')
+                }, 2000)
+              }
+            }
+            performImmediateLogout()
+          }, 500)
         }
       }
     }

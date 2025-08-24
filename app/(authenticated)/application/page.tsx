@@ -208,9 +208,7 @@ export default function ApplicationPage() {
       setError("First and second preference departments must be different.");
       setIsSubmitting(false);
       return;
-    }
-
-    try {
+    } try {
       await saveApplication({
         name: formData.name,
         email: formData.email,
@@ -239,7 +237,7 @@ export default function ApplicationPage() {
 
       setTimeout(() => {
         router.push("/dashboard");
-      }, 100);
+      }, 1000);
     } catch (err: any) {
       setError(
         err.message || "Failed to submit application. Please try again.",
@@ -288,8 +286,7 @@ export default function ApplicationPage() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Application Closed</AlertTitle>
             <AlertDescription>
-              The application deadline has passed. You can no longer submit or
-              edit your application.
+              The application deadline has passed. You can no longer submit or edit your application.
             </AlertDescription>
           </Alert>
         )}
@@ -304,7 +301,9 @@ export default function ApplicationPage() {
         {success && (
           <Alert className="mb-6">
             <CheckCircle className="h-4 w-4" />
-            <AlertDescription>{success}</AlertDescription>
+            <AlertDescription>
+              {success} Redirecting to dashboard...
+            </AlertDescription>
           </Alert>
         )}
 

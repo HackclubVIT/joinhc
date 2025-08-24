@@ -201,7 +201,7 @@ function LoginContent() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} onReset={forgotPassword}>
               <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 <div className="space-y-2">
                   <Label
@@ -306,7 +306,7 @@ function LoginContent() {
                         )}
                         <DialogFooter>
                           <Button
-                            type="submit"
+                            type="reset"
                             disabled={isResetLoading}
                             className="w-full text-sm sm:text-base"
                           >
