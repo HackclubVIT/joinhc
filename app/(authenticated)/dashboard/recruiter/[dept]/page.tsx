@@ -505,7 +505,7 @@ export default function DepartmentPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => router.back()}
-                className="text-muted-foreground hover:text-primary"
+                className="text-muted-foreground"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Dashboard
