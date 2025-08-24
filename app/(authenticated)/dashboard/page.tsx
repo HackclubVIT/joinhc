@@ -26,6 +26,7 @@ import {
   Target,
   Video,
   XCircle,
+  Sparkles
 } from "lucide-react";
 import {
   getApplicationForUser,
@@ -521,22 +522,38 @@ export default function ApplicantDashboard() {
 
             <div className="stats-card">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-xl sm:text-2xl font-black gradient-text-secondary">
-                  {applicationSubmitted ? "100%" : "0%"}
+                <div className="text-xl sm:text-2xl font-black">
+                  {overallStatus === "shortlisted" || overallStatus === "accepted" 
+                    ? "🌟" 
+                    : overallStatus === "rejected" 
+                    ? "✖️" 
+                    : applicationSubmitted 
+                    ? "📝" 
+                    : "⏳"}
                 </div>
-                <div className="p-1.5 sm:p-2 rounded-xl bg-purple-500/20">
-                  <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400" />
+                <div className="p-1.5 sm:p-2 rounded-xl bg-blue-500/20">
+                  <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
                 </div>
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground font-medium">
-                Progress
+                Round Status
               </p>
-              <p className="text-xs text-muted-foreground">Completion rate</p>
+              <p className="text-xs text-muted-foreground">
+                {overallStatus === "shortlisted" 
+                  ? "Interview Round" 
+                  : overallStatus === "accepted"
+                  ? "Selection Complete"
+                  : overallStatus === "rejected"
+                  ? "Better luck next time"
+                  : applicationSubmitted
+                  ? "Application Review"
+                  : "Not Started"}
+              </p>
             </div>
 
             <div className="stats-card">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-xl sm:text-2xl font-black gradient-text">
+                <div className="text-xl sm:text-2xl font-black">
                   {overallStatus === "shortlisted" ||
                   overallStatus === "accepted"
                     ? "🎉"
@@ -674,24 +691,7 @@ export default function ApplicantDashboard() {
                       </div>
                     )}
 
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium">
-                          Application Progress
-                        </span>
-                        <span className="font-bold text-primary">
-                          {overallStatus === "pending" ? "75%" : "100%"}
-                        </span>
-                      </div>
-                      <div className="progress-modern">
-                        <div
-                          className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
-                          style={{
-                            width: overallStatus === "pending" ? "75%" : "100%",
-                          }}
-                        />
-                      </div>
-                    </div>
+              
                   </div>
                 ) : (
                   <div className="neo-card p-6 bg-amber-500/10 border-amber-500/30">
