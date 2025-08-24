@@ -286,8 +286,7 @@ export default function ApplicationPage() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Application Closed</AlertTitle>
             <AlertDescription>
-              The application deadline has passed. You can no longer submit or
-              edit your application.
+              The application deadline has passed. You can no longer submit or edit your application.
             </AlertDescription>
           </Alert>
         )}

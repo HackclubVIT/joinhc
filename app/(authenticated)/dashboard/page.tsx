@@ -441,7 +441,7 @@ export default function ApplicantDashboard() {
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-primary/20 border border-primary/30 mb-4 sm:mb-6">
             <Award className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
             <span className="text-xs sm:text-sm font-medium text-primary">
-              Welcome Back, Developer!
+              Welcome Back !
             </span>
           </div>
 
@@ -459,11 +459,10 @@ export default function ApplicantDashboard() {
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black mb-3 sm:mb-4 text-foreground">
-            Your <span className="gradient-text">Journey</span> Continues 🚀
+            Tech. <span className="gradient-text">Meets.</span> Innovaton
           </h1>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 max-w-2xl mx-auto">
-            Track your progress, manage applications, and stay updated with your
-            recruitment journey.
+            Onboarding to HackClub VITC begins here.
           </p>
 
           {/* Enhanced Quick Stats */}
@@ -471,7 +470,7 @@ export default function ApplicantDashboard() {
             <div className="stats-card group">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xl sm:text-2xl font-black gradient-text">
-                  {applicationSubmitted ? "✓" : "○"}
+                  {applicationSubmitted ? "✓" : "❌"}
                 </div>
                 <div
                   className={`p-1.5 sm:p-2 rounded-xl ${
@@ -1237,20 +1236,6 @@ export default function ApplicantDashboard() {
                     </div>
                     <Bell className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 ml-2" />
                   </div>
-
-                  <div className="flex justify-between items-center p-3 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-                    <div>
-                      <p className="font-medium text-sm sm:text-base">Results Announcement</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">TBA</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-                    <div>
-                      <p className="font-medium text-sm sm:text-base">Orientation</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">TBA</p>
-                    </div>
-                  </div>
                 </div>
               </CardContent>
             </div>
@@ -1282,7 +1267,16 @@ export default function ApplicantDashboard() {
                     className="w-full justify-start h-10 sm:h-12 text-sm sm:text-base border-2 hover:bg-primary/5"
                   >
                     <User className="mr-3 h-4 w-4 sm:h-5 sm:w-5" />
-                    Update Profile
+                    Profile
+                  </Button>
+                </Link>
+                <Link href="/settings" className="block">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start h-10 sm:h-12 text-sm sm:text-base border-2 hover:bg-primary/5"
+                  >
+                    <User className="mr-3 h-4 w-4 sm:h-5 sm:w-5" />
+                    Settings
                   </Button>
                 </Link>
               </CardContent>
