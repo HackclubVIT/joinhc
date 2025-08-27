@@ -1636,7 +1636,7 @@ export default function DepartmentPage() {
 
                     <div>
                       <Label className="text-sm font-medium">
-                        Priority Reasoning
+                        Why HackClub?
                       </Label>
                       <p className="text-sm text-muted-foreground">
                         {selectedApplicant.priority_reason}
