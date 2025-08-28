@@ -366,22 +366,6 @@ export default function RecruiterDashboard() {
               Shortlisted
             </p>
           </div>
-
-
-
-          <div className="stats-card min-w-0">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xl sm:text-2xl font-black text-red-600">
-                {totalStats.totalRejected}
-              </div>
-              <div className="p-1.5 sm:p-2 rounded-xl bg-red-500/20">
-                <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
-              Rejected
-            </p>
-          </div>
         </div>
 
         <div className="space-y-6 sm:space-y-8">
