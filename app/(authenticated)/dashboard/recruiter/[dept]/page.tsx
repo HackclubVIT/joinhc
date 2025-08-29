@@ -264,10 +264,17 @@ export default function DepartmentPage() {
           ?.toLowerCase()
           .includes(searchQuery.toLowerCase());
 
-      const overallStatus = getOverallApplicationStatus(applicant);
+      // Get the status for the current department instead of overall status
+      let currentDeptStatus = "";
+      if (applicant.first_pref_dept_id === deptId) {
+        currentDeptStatus = applicant.first_pref_status;
+      } else if (applicant.second_pref_dept_id === deptId) {
+        currentDeptStatus = applicant.second_pref_status;
+      }
+
       const matchesStatus =
         statusFilter === "all" ||
-        overallStatus.toLowerCase() === statusFilter.toLowerCase();
+        currentDeptStatus.toLowerCase() === statusFilter.toLowerCase();
 
       const matchesPreference =
         preferenceFilter === "all" ||
@@ -417,22 +424,51 @@ export default function DepartmentPage() {
     secondPrefCount: applicants.filter(
       (app) => app.second_pref_dept_id === deptId
     ).length,
-    pendingCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "pending"
-    ).length,
-    shortlistedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "shortlisted"
-    ).length,
-
-    notSelectedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "not_selected"
-    ).length,
-    acceptedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "accepted"
-    ).length,
-    rejectedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "rejected"
-    ).length,
+    pendingCount: applicants.filter((app) => {
+      // Count pending applications for this specific department
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "pending";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "pending";
+      }
+      return false;
+    }).length,
+    shortlistedCount: applicants.filter((app) => {
+      // Count shortlisted applications for this specific department
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "shortlisted";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "shortlisted";
+      }
+      return false;
+    }).length,
+    notSelectedCount: applicants.filter((app) => {
+      // Count not selected applications for this specific department
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "not_selected";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "not_selected";
+      }
+      return false;
+    }).length,
+    acceptedCount: applicants.filter((app) => {
+      // Count accepted applications for this specific department
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "accepted";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "accepted";
+      }
+      return false;
+    }).length,
+    rejectedCount: applicants.filter((app) => {
+      // Count rejected applications for this specific department
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "rejected";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "rejected";
+      }
+      return false;
+    }).length,
   };
 
   useEffect(() => {
@@ -1569,11 +1605,20 @@ export default function DepartmentPage() {
                       <p className="text-sm">{selectedApplicant.register_no}</p>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium">Status</Label>
-                      <div className="mt-1">
-                        {getStatusBadge(
-                          getOverallApplicationStatus(selectedApplicant)
-                        )}
+                      <Label className="text-sm font-medium">Department Status</Label>
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{firstPrefDeptName}:</span>
+                          <div className="ml-2">
+                            {getStatusBadge(selectedApplicant.first_pref_status)}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{secondPrefDeptName}:</span>
+                          <div className="ml-2">
+                            {getStatusBadge(selectedApplicant.second_pref_status)}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1583,7 +1628,12 @@ export default function DepartmentPage() {
                       <Label className="text-sm font-medium">
                         First Preference
                       </Label>
-                      <p className="text-sm font-medium">{firstPrefDeptName}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">{firstPrefDeptName}</p>
+                        <div className="ml-2">
+                          {getStatusBadge(selectedApplicant.first_pref_status)}
+                        </div>
+                      </div>
                       <p className="text-sm text-muted-foreground mt-1">
                         {selectedApplicant.first_pref_reason}
                       </p>
@@ -1593,9 +1643,14 @@ export default function DepartmentPage() {
                       <Label className="text-sm font-medium">
                         Second Preference
                       </Label>
-                      <p className="text-sm font-medium">
-                        {secondPrefDeptName}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">
+                          {secondPrefDeptName}
+                        </p>
+                        <div className="ml-2">
+                          {getStatusBadge(selectedApplicant.second_pref_status)}
+                        </div>
+                      </div>
                       <p className="text-sm text-muted-foreground mt-1">
                         {selectedApplicant.second_pref_reason}
                       </p>
