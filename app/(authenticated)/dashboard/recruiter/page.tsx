@@ -30,6 +30,7 @@ import {
   getRecruiterDepartments,
   getAllApplicationsForExport,
   getDepartmentApplicants,
+  getDepartmentApplicantsOptimized,
   getDepartmentNameById,
   getApplicationSettings,
   isCurrentUserRecruiterOrEvaluator,
@@ -73,11 +74,39 @@ export default function RecruiterDashboard() {
   const [deadline, setDeadline] = useState<Date | null>(null);
   const [applicationDeadline, setApplicationDeadline] = useState<Date | null>(null);
   const [shortlistDeadline, setShortlistDeadline] = useState<Date | null>(null);
+  const [deadlinesLoaded, setDeadlinesLoaded] = useState(false);
+
+  useEffect(() => {
+    const fetchDeadlines = async () => {
+      try {
+        const [appDL, shortDL, settingsData] = await Promise.all([
+          getApplicationDeadline(),
+          getShortlistDeadline(),
+          getApplicationSettings(),
+        ]);
+        
+        setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
+        setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
+        
+        if (settingsData?.deadline) {
+          setDeadline(new Date(settingsData.deadline));
+        }
+      } catch (err) {
+        setApplicationDeadline(null);
+        setShortlistDeadline(null);
+        setDeadline(null);
+      } finally {
+        setDeadlinesLoaded(true);
+      }
+    };
+
+    fetchDeadlines();
+  }, [user, userRole]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        if (!user) {
+        if (!user || !deadlinesLoaded) {
           setIsLoading(false);
           return;
         }
@@ -88,14 +117,7 @@ export default function RecruiterDashboard() {
           return;
         }
 
-        const [recruiterDepts, settingsData] = await Promise.all([
-          getRecruiterDepartments(user.id),
-          getApplicationSettings(),
-        ]);
-
-        if (settingsData?.deadline) {
-          setDeadline(new Date(settingsData.deadline));
-        }
+        const recruiterDepts = await getRecruiterDepartments(user.id);
 
         const departmentStats: DepartmentStats[] = [];
         let overallStats = {
@@ -106,10 +128,16 @@ export default function RecruiterDashboard() {
         };
 
         setPanels(await getPanelsForUser(user.id));
+        
         for (const dept of recruiterDepts) {
           if (dept.department_id) {
+            
+            const appDeadlineObj = applicationDeadline ? { deadline: applicationDeadline.toISOString() } : null;
+            const shortlistDeadlineObj = shortlistDeadline ? { deadline: shortlistDeadline.toISOString() } : null;
+            
+            
             const [applicants, deptName] = await Promise.all([
-              getDepartmentApplicants(dept.department_id),
+              getDepartmentApplicantsOptimized(dept.department_id, appDeadlineObj, shortlistDeadlineObj),
               getDepartmentNameById(dept.department_id),
             ]);
 
@@ -142,23 +170,11 @@ export default function RecruiterDashboard() {
       }
     };
 
-    const fetchDeadlines = async () => {
-      try {
-        const [appDL, shortDL] = await Promise.all([
-          getApplicationDeadline(),
-          getShortlistDeadline(),
-        ]);
-        setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
-        setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
-      } catch (err) {
-        setApplicationDeadline(null);
-        setShortlistDeadline(null);
-      }
-    };
-
-    fetchData();
-    fetchDeadlines();
-  }, [user, userRole]);
+    
+    if (deadlinesLoaded) {
+      fetchData();
+    }
+  }, [user, userRole, deadlinesLoaded]);
 
   const now = new Date();
   const canPanel = shortlistDeadline && now > shortlistDeadline;

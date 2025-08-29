@@ -1579,6 +1579,91 @@ export async function getDepartmentApplicants(departmentId: string) {
   }
 }
 
+
+export async function getDepartmentApplicantsOptimized(
+  departmentId: string, 
+  appDeadline: { deadline: string } | null,
+  shortlistDeadline: { deadline: string } | null
+) {
+  const supabase = createClient();
+
+  function normalizeUuid(str: string) {
+    const cleaned = str.replace(/\s+/g, "").toLowerCase();
+    if (
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+        cleaned
+      )
+    ) {
+      return cleaned;
+    }
+
+    if (/^[0-9a-f]{32}$/.test(cleaned)) {
+      return `${cleaned.slice(0, 8)}-${cleaned.slice(8, 12)}-${cleaned.slice(
+        12,
+        16
+      )}-${cleaned.slice(16, 20)}-${cleaned.slice(20)}`;
+    }
+    return str;
+  }
+
+  function isUuid(str: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      str
+    );
+  }
+
+  const normalizedId = normalizeUuid(departmentId);
+  if (!isUuid(normalizedId)) {
+    console.error(
+      "Invalid departmentId passed to getDepartmentApplicantsOptimized:",
+      departmentId
+    );
+    return [];
+  }
+
+  try {
+    
+    const now = new Date();
+    const appDeadlineDate = appDeadline?.deadline ? new Date(appDeadline.deadline) : null;
+    const shortlistDeadlineDate = shortlistDeadline?.deadline ? new Date(shortlistDeadline.deadline) : null;
+
+    let statusFilter: string[] = [];
+
+    if (appDeadlineDate && shortlistDeadlineDate) {
+      if (now < appDeadlineDate) {
+        statusFilter = ['pending', 'shortlisted', 'not_selected', 'accepted', 'rejected'];
+      } else if (now < shortlistDeadlineDate) {
+        statusFilter = ['pending', 'shortlisted', 'not_selected', 'accepted', 'rejected'];
+      } else {
+        statusFilter = ['shortlisted', 'accepted', 'rejected'];
+      }
+    } else {
+      statusFilter = ['pending', 'shortlisted', 'not_selected', 'accepted', 'rejected'];
+    }
+
+    const { data, error } = await supabase
+      .from("applications")
+      .select("*")
+      .or(
+        `first_pref_dept_id.eq.${normalizedId},second_pref_dept_id.eq.${normalizedId}`
+      )
+      .or(
+        `first_pref_status.in.(${statusFilter.join(',')}),second_pref_status.in.(${statusFilter.join(',')})`
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching department applicants:", error);
+      return [];
+    }
+
+    return data;
+  } catch (err) {
+    console.error("Error in getDepartmentApplicantsOptimized:", err);
+    return [];
+  }
+}
+
 export async function updateRecruiterDepartmentRole(recruiterId: string, departmentId: string, newRole: 'recruiter' | 'evaluator') {
   const supabase = createClient();
   const { error } = await supabase
