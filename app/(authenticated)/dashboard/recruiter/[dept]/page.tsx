@@ -1741,7 +1741,7 @@ export default function DepartmentPage() {
                             getPreferenceType(selectedApplicant);
                           handleStatusUpdate(
                             selectedApplicant.id,
-                            "rejected",
+                            "not_selected",
                             preferenceType
                           );
                         }
