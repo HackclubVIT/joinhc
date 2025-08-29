@@ -30,6 +30,7 @@ import {
   getRecruiterDepartments,
   getAllApplicationsForExport,
   getDepartmentApplicants,
+  getDepartmentApplicantsOptimized,
   getDepartmentNameById,
   getApplicationSettings,
   isCurrentUserRecruiterOrEvaluator,
@@ -73,11 +74,39 @@ export default function RecruiterDashboard() {
   const [deadline, setDeadline] = useState<Date | null>(null);
   const [applicationDeadline, setApplicationDeadline] = useState<Date | null>(null);
   const [shortlistDeadline, setShortlistDeadline] = useState<Date | null>(null);
+  const [deadlinesLoaded, setDeadlinesLoaded] = useState(false);
+
+  useEffect(() => {
+    const fetchDeadlines = async () => {
+      try {
+        const [appDL, shortDL, settingsData] = await Promise.all([
+          getApplicationDeadline(),
+          getShortlistDeadline(),
+          getApplicationSettings(),
+        ]);
+        
+        setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
+        setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
+        
+        if (settingsData?.deadline) {
+          setDeadline(new Date(settingsData.deadline));
+        }
+      } catch (err) {
+        setApplicationDeadline(null);
+        setShortlistDeadline(null);
+        setDeadline(null);
+      } finally {
+        setDeadlinesLoaded(true);
+      }
+    };
+
+    fetchDeadlines();
+  }, [user, userRole]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        if (!user) {
+        if (!user || !deadlinesLoaded) {
           setIsLoading(false);
           return;
         }
@@ -88,14 +117,7 @@ export default function RecruiterDashboard() {
           return;
         }
 
-        const [recruiterDepts, settingsData] = await Promise.all([
-          getRecruiterDepartments(user.id),
-          getApplicationSettings(),
-        ]);
-
-        if (settingsData?.deadline) {
-          setDeadline(new Date(settingsData.deadline));
-        }
+        const recruiterDepts = await getRecruiterDepartments(user.id);
 
         const departmentStats: DepartmentStats[] = [];
         let overallStats = {
@@ -106,10 +128,16 @@ export default function RecruiterDashboard() {
         };
 
         setPanels(await getPanelsForUser(user.id));
+        
         for (const dept of recruiterDepts) {
           if (dept.department_id) {
+            
+            const appDeadlineObj = applicationDeadline ? { deadline: applicationDeadline.toISOString() } : null;
+            const shortlistDeadlineObj = shortlistDeadline ? { deadline: shortlistDeadline.toISOString() } : null;
+            
+            
             const [applicants, deptName] = await Promise.all([
-              getDepartmentApplicants(dept.department_id),
+              getDepartmentApplicantsOptimized(dept.department_id, appDeadlineObj, shortlistDeadlineObj),
               getDepartmentNameById(dept.department_id),
             ]);
 
@@ -142,23 +170,11 @@ export default function RecruiterDashboard() {
       }
     };
 
-    const fetchDeadlines = async () => {
-      try {
-        const [appDL, shortDL] = await Promise.all([
-          getApplicationDeadline(),
-          getShortlistDeadline(),
-        ]);
-        setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
-        setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
-      } catch (err) {
-        setApplicationDeadline(null);
-        setShortlistDeadline(null);
-      }
-    };
-
-    fetchData();
-    fetchDeadlines();
-  }, [user, userRole]);
+    
+    if (deadlinesLoaded) {
+      fetchData();
+    }
+  }, [user, userRole, deadlinesLoaded]);
 
   const now = new Date();
   const canPanel = shortlistDeadline && now > shortlistDeadline;
@@ -183,22 +199,26 @@ export default function RecruiterDashboard() {
       const isFirstPref = app.first_pref_dept_id === departmentId;
       const isSecondPref = app.second_pref_dept_id === departmentId;
 
-      let status = "pending";
+      let status = null;
       if (isFirstPref) {
-        status = app.first_pref_status || "pending";
+        status = app.first_pref_status;
       } else if (isSecondPref) {
-        status = app.second_pref_status || "pending";
+        status = app.second_pref_status;
       }
 
-      switch (status) {
-        case "shortlisted":
-          shortlistedCount++;
-          break;
-        case "rejected":
-          rejectedCount++;
-          break;
-        default:
-          pendingCount++;
+      if (status) {
+        switch (status) {
+          case "pending":
+            pendingCount++;
+            break;
+          case "shortlisted":
+            shortlistedCount++;
+            break;
+          case "rejected":
+          case "not_selected":
+            rejectedCount++;
+            break;
+        }
       }
     });
 
@@ -364,22 +384,6 @@ export default function RecruiterDashboard() {
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
               Shortlisted
-            </p>
-          </div>
-
-
-
-          <div className="stats-card min-w-0">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xl sm:text-2xl font-black text-red-600">
-                {totalStats.totalRejected}
-              </div>
-              <div className="p-1.5 sm:p-2 rounded-xl bg-red-500/20">
-                <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
-              Rejected
             </p>
           </div>
         </div>

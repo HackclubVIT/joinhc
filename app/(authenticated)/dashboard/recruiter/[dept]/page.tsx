@@ -59,6 +59,7 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import {
   getDepartmentApplicants,
+  getDepartmentApplicantsOptimized,
   getDepartmentNameById,
   updateApplicationStatus,
   getOverallApplicationStatus,
@@ -157,6 +158,7 @@ export default function DepartmentPage() {
 
   const [applicationDeadline, setApplicationDeadline] = useState<Date | null>(null);
   const [shortlistDeadline, setShortlistDeadline] = useState<Date | null>(null);
+  const [deadlinesLoaded, setDeadlinesLoaded] = useState(false);
 
   const fetchPanelMembers = async () => {
     if (selectedPanel) {
@@ -174,30 +176,37 @@ export default function DepartmentPage() {
     fetchPanelMembers();
   }, [selectedPanel]);
 
-  useEffect(() => {
-    if (panelMembers.length > 0) return;
-    
-    fetchPanelMembers();
-  }, [panelMembers]);
+  
+  
 
   useEffect(() => {
     const fetchData = async () => {
       if (selectedApplicant) {
-        const [marks, average] = await Promise.all([
-          getApplicantMarks(selectedApplicant.id, deptId),
-          getApplicantAverageMarks(selectedApplicant.id, deptId)
-        ]);
-        setEvaluations(marks);
-        setAverageMarks(average);
+        
+        const now = new Date();
+        const shouldFetchEvaluations = shortlistDeadline && now > shortlistDeadline;
+        
+        if (shouldFetchEvaluations) {
+          const [marks, average] = await Promise.all([
+            getApplicantMarks(selectedApplicant.id, deptId),
+            getApplicantAverageMarks(selectedApplicant.id, deptId)
+          ]);
+          setEvaluations(marks);
+          setAverageMarks(average);
+        } else {
+          
+          setEvaluations([]);
+          setAverageMarks(null);
+        }
       }
     };
 
     fetchData();
-  }, [isMarksDialogOpen, selectedApplicant, deptId]);
+  }, [isMarksDialogOpen, selectedApplicant, deptId, shortlistDeadline]);
 
   useEffect(() => {
     if (panels.length > 0) return;
-    
+
     const fetchPanels = async () => {
       try {
         const data = await getPanelByDepartment(deptId);
@@ -208,7 +217,7 @@ export default function DepartmentPage() {
     };
 
     fetchPanels();
-  }, [panels]);
+  }, [deptId]); 
 
   useEffect(() => {
     const fetchDeptName = async () => {
@@ -221,29 +230,41 @@ export default function DepartmentPage() {
   useEffect(() => {
     const fetchApplicants = async () => {
       try {
-        const data = await getDepartmentApplicants(deptId);
+        
+        if (!deadlinesLoaded) return;
+
+        
+        const appDeadlineObj = applicationDeadline ? { deadline: applicationDeadline.toISOString() } : null;
+        const shortlistDeadlineObj = shortlistDeadline ? { deadline: shortlistDeadline.toISOString() } : null;
+
+        const data = await getDepartmentApplicantsOptimized(deptId, appDeadlineObj, shortlistDeadlineObj);
         setApplicants(data);
+
         
-        
+        const now = new Date();
+        const shouldFetchEvaluations = shortlistDeadline && now > shortlistDeadline;
+
         const averages: { [applicantId: string]: { average: number; totalEvaluators: number } | null } = {};
-        
-        for (const applicant of data) {
-          try {
-            const avgData = await getApplicantAverageMarks(applicant.id, deptId);
-            if (avgData) {
-              averages[applicant.id] = {
-                average: avgData.average,
-                totalEvaluators: avgData.totalEvaluators
-              };
-            } else {
+
+        if (shouldFetchEvaluations) {
+          for (const applicant of data) {
+            try {
+              const avgData = await getApplicantAverageMarks(applicant.id, deptId);
+              if (avgData) {
+                averages[applicant.id] = {
+                  average: avgData.average,
+                  totalEvaluators: avgData.totalEvaluators
+                };
+              } else {
+                averages[applicant.id] = null;
+              }
+            } catch (err) {
+              console.error(`Error fetching average for applicant ${applicant.id}:`, err);
               averages[applicant.id] = null;
             }
-          } catch (err) {
-            console.error(`Error fetching average for applicant ${applicant.id}:`, err);
-            averages[applicant.id] = null;
           }
         }
-        
+
         setApplicantAverages(averages);
       } catch (err) {
         console.error("Error fetching applicants:", err);
@@ -252,8 +273,11 @@ export default function DepartmentPage() {
       }
     };
 
-    fetchApplicants();
-  }, [deptId]);
+    
+    if (deadlinesLoaded) {
+      fetchApplicants();
+    }
+  }, [deptId, shortlistDeadline, deadlinesLoaded]); 
 
   useEffect(() => {
     const filtered = applicants.filter((applicant) => {
@@ -264,10 +288,17 @@ export default function DepartmentPage() {
           ?.toLowerCase()
           .includes(searchQuery.toLowerCase());
 
-      const overallStatus = getOverallApplicationStatus(applicant);
+      
+      let currentDeptStatus = "";
+      if (applicant.first_pref_dept_id === deptId) {
+        currentDeptStatus = applicant.first_pref_status;
+      } else if (applicant.second_pref_dept_id === deptId) {
+        currentDeptStatus = applicant.second_pref_status;
+      }
+
       const matchesStatus =
         statusFilter === "all" ||
-        overallStatus.toLowerCase() === statusFilter.toLowerCase();
+        currentDeptStatus.toLowerCase() === statusFilter.toLowerCase();
 
       const matchesPreference =
         preferenceFilter === "all" ||
@@ -294,12 +325,14 @@ export default function DepartmentPage() {
       } catch (err) {
         setApplicationDeadline(null);
         setShortlistDeadline(null);
+      } finally {
+        setDeadlinesLoaded(true); // Mark deadlines as loaded
       }
     }
     fetchDeadlines();
   }, []);
 
-  
+
   useEffect(() => {
     const checkUserRole = async () => {
       try {
@@ -310,22 +343,22 @@ export default function DepartmentPage() {
         setIsRecruiterForDepartment(false);
       }
     };
-    
+
     checkUserRole();
   }, [deptId]);
 
   const now = new Date();
   const canShortlist = applicationDeadline && shortlistDeadline && now > applicationDeadline && now < shortlistDeadline;
   const canPanel = shortlistDeadline && now > shortlistDeadline;
-  
-  
+
+
   const getCurrentPhase = () => {
     if (!applicationDeadline || !shortlistDeadline) return 'unknown';
     if (now < applicationDeadline) return 'application';
     if (now < shortlistDeadline) return 'shortlisting';
     return 'interview';
   };
-  
+
   const currentPhase = getCurrentPhase();
 
   const handleStatusUpdate = async (
@@ -401,7 +434,7 @@ export default function DepartmentPage() {
     return applicant.first_pref_dept_id === deptId ? "first" : "second";
   };
 
-  
+
   const getAverageScoreBadge = (average: number) => {
     if (average >= 8) return "bg-green-100 text-green-800 border-green-200";
     if (average >= 6) return "bg-yellow-100 text-yellow-800 border-yellow-200";
@@ -417,22 +450,51 @@ export default function DepartmentPage() {
     secondPrefCount: applicants.filter(
       (app) => app.second_pref_dept_id === deptId
     ).length,
-    pendingCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "pending"
-    ).length,
-    shortlistedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "shortlisted"
-    ).length,
-
-    notSelectedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "not_selected"
-    ).length,
-    acceptedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "accepted"
-    ).length,
-    rejectedCount: applicants.filter(
-      (app) => getOverallApplicationStatus(app) === "rejected"
-    ).length,
+    pendingCount: applicants.filter((app) => {
+      
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "pending";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "pending";
+      }
+      return false;
+    }).length,
+    shortlistedCount: applicants.filter((app) => {
+      
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "shortlisted";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "shortlisted";
+      }
+      return false;
+    }).length,
+    notSelectedCount: applicants.filter((app) => {
+      
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "not_selected";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "not_selected";
+      }
+      return false;
+    }).length,
+    acceptedCount: applicants.filter((app) => {
+      
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "accepted";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "accepted";
+      }
+      return false;
+    }).length,
+    rejectedCount: applicants.filter((app) => {
+      
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "rejected";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "rejected";
+      }
+      return false;
+    }).length,
   };
 
   useEffect(() => {
@@ -452,7 +514,7 @@ export default function DepartmentPage() {
     fetchDeptNames();
   }, [selectedApplicant]);
 
-  
+
   useEffect(() => {
     if (isPanelDialogOpen && panelDialogTab === 'applicants' && selectedPanel) {
       getShortlistedApplicantsWithAssignmentStatus(deptId, selectedPanel.id).then(setShortlistedApplicants);
@@ -482,7 +544,7 @@ export default function DepartmentPage() {
     setIsPanelDialogOpen(true);
   };
 
-  
+
   const handleAssignApplicantToPanel = async (applicantId: string, preference: 'first' | 'second') => {
     if (!selectedPanel) return;
     try {
@@ -537,22 +599,22 @@ export default function DepartmentPage() {
                 </p>
                 {currentPhase !== 'unknown' && (
                   <div className="mt-2">
-                    <Badge 
+                    <Badge
                       variant={currentPhase === 'application' ? 'secondary' : currentPhase === 'shortlisting' ? 'default' : 'outline'}
-                      className={currentPhase === 'application' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 
-                               currentPhase === 'shortlisting' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
-                               'bg-green-500/20 text-green-400 border-green-500/30'}
+                      className={currentPhase === 'application' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                        currentPhase === 'shortlisting' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                          'bg-green-500/20 text-green-400 border-green-500/30'}
                     >
-                      {currentPhase === 'application' ? 'Application Phase' : 
-                       currentPhase === 'shortlisting' ? 'Shortlisting Phase' : 
-                       'Interview Phase'}
+                      {currentPhase === 'application' ? 'Application Phase' :
+                        currentPhase === 'shortlisting' ? 'Shortlisting Phase' :
+                          'Interview Phase'}
                     </Badge>
                   </div>
                 )}
               </div>
               {/* Role indicator */}
               <div className="flex items-center justify-center sm:justify-end gap-2">
-                <Badge 
+                <Badge
                   variant={isRecruiterForDepartment ? "default" : "secondary"}
                   className={isRecruiterForDepartment ? "bg-green-500 hover:bg-green-600" : "bg-orange-500 hover:bg-orange-600 text-white"}
                 >
@@ -626,52 +688,20 @@ export default function DepartmentPage() {
               </div>
             </div>
 
-            {currentPhase === 'shortlisting' && (
+            {currentPhase === 'interview' && (
               <div className="stats-card">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Not Selected</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {departmentStats.notSelectedCount}
+                    <p className="text-sm text-muted-foreground">Accepted</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {departmentStats.acceptedCount}
                     </p>
                   </div>
-                  <div className="p-3 rounded-full bg-red-500/20 border border-red-500/50">
-                    <XCircle className="h-5 w-5 text-red-400" />
+                  <div className="p-3 rounded-full bg-green-500/20 border border-green-500/50">
+                    <CheckCircle className="h-5 w-5 text-green-400" />
                   </div>
                 </div>
               </div>
-            )}
-
-            {currentPhase === 'interview' && (
-              <>
-                <div className="stats-card">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Accepted</p>
-                      <p className="text-2xl font-bold text-green-600">
-                        {departmentStats.acceptedCount}
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-full bg-green-500/20 border border-green-500/50">
-                      <CheckCircle className="h-5 w-5 text-green-400" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="stats-card">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Rejected</p>
-                      <p className="text-2xl font-bold text-red-600">
-                        {departmentStats.rejectedCount}
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-full bg-red-500/20 border border-red-500/50">
-                      <XCircle className="h-5 w-5 text-red-400" />
-                    </div>
-                  </div>
-                </div>
-              </>
             )}
           </div>
 
@@ -758,11 +788,11 @@ export default function DepartmentPage() {
                   </CardDescription>
                   {currentPhase !== 'unknown' && (
                     <div className="mt-2 text-xs text-muted-foreground">
-                      {currentPhase === 'application' && 
+                      {currentPhase === 'application' &&
                         "Showing all applicants. Shortlisting will begin after the application deadline."}
-                      {currentPhase === 'shortlisting' && 
+                      {currentPhase === 'shortlisting' &&
                         "Showing all applicants for shortlisting management."}
-                      {currentPhase === 'interview' && 
+                      {currentPhase === 'interview' &&
                         "Showing shortlisted applicants and final results (accepted/rejected)."}
                     </div>
                   )}
@@ -875,11 +905,10 @@ export default function DepartmentPage() {
                                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                                   <Badge
                                     variant="outline"
-                                    className={`text-xs sm:text-sm ${
-                                      preferenceType === "first"
+                                    className={`text-xs sm:text-sm ${preferenceType === "first"
                                         ? "border-primary text-primary bg-primary/10"
                                         : ""
-                                    }`}
+                                      }`}
                                   >
                                     {preferenceType === "first" ? "1st" : "2nd"} Preference
                                   </Badge>
@@ -990,23 +1019,26 @@ export default function DepartmentPage() {
                                 <div className="flex flex-wrap gap-2 items-center">
                                   {canPanel && (
                                     <div className="flex flex-wrap items-center gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        setSelectedApplicant(applicant);
-                                        setIsMarksDialogOpen(true);
-                                      }}
-                                        className="border-2 text-xs sm:text-sm"
-                                    >
-                                        <NotebookText className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                                        <span className="hidden sm:inline">View Marks</span>
-                                        <span className="sm:hidden">Marks</span>
-                                    </Button>
-                                      {/* Average Marks Indicator */}
-                                      {applicantAverages[applicant.id] && (
-                                        <Badge 
-                                          variant="outline" 
+                                      {/* Only show View Marks button if shortlisting deadline has passed (interview phase) */}
+                                      {shortlistDeadline && new Date() > shortlistDeadline && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setSelectedApplicant(applicant);
+                                            setIsMarksDialogOpen(true);
+                                          }}
+                                          className="border-2 text-xs sm:text-sm"
+                                        >
+                                          <NotebookText className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                                          <span className="hidden sm:inline">View Marks</span>
+                                          <span className="sm:hidden">Marks</span>
+                                        </Button>
+                                      )}
+                                      {/* Average Marks Indicator - only show when deadline has passed */}
+                                      {applicantAverages[applicant.id] && shortlistDeadline && new Date() > shortlistDeadline && (
+                                        <Badge
+                                          variant="outline"
                                           className={`text-xs ${getAverageScoreBadge(applicantAverages[applicant.id]!.average)}`}
                                         >
                                           Average: {applicantAverages[applicant.id]?.average}
@@ -1058,7 +1090,7 @@ export default function DepartmentPage() {
                     Add recruiters and assign applicants to this panel
                   </DialogDescription>
                 </DialogHeader>
-                
+
                 <Tabs value={panelDialogTab} onValueChange={setPanelDialogTab} className="flex-1">
                   <TabsList className="grid w-full grid-cols-2 mb-6">
                     <TabsTrigger value="recruiters" className="flex items-center gap-2">
@@ -1070,7 +1102,7 @@ export default function DepartmentPage() {
                       Assign Applicants
                     </TabsTrigger>
                   </TabsList>
-                  
+
                   <TabsContent value="recruiters" className="space-y-6">
                     <div className="bg-muted/30 rounded-lg p-4">
                       <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -1080,34 +1112,34 @@ export default function DepartmentPage() {
                       <div className="flex gap-3 items-end">
                         <div className="flex-1">
                           <label className="text-sm font-medium mb-2 block">Select Recruiter</label>
-                    <Select
-                      onValueChange={async (value) => {
-                        if (selectedPanel) {
-                          const res = await addRecruiterToPanel(
-                            value,
-                            deptId,
-                            selectedPanel?.id
-                          );
-                          if (res) {
-                            toast({ title: 'Success', description: 'Recruiter added to panel successfully' });
-                            setPanelMembers([]);
-                          } else {
-                            toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
-                          }
-                        }
-                      }}
-                    >
+                          <Select
+                            onValueChange={async (value) => {
+                              if (selectedPanel) {
+                                const res = await addRecruiterToPanel(
+                                  value,
+                                  deptId,
+                                  selectedPanel?.id
+                                );
+                                if (res) {
+                                  toast({ title: 'Success', description: 'Recruiter added to panel successfully' });
+                                  setPanelMembers([]);
+                                } else {
+                                  toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
+                                }
+                              }
+                            }}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Choose a recruiter to add..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departmentRecruiters.map((recruiter) => (
-                          <SelectItem value={recruiter.id} key={recruiter.id}>
-                            {recruiter.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departmentRecruiters.map((recruiter) => (
+                                <SelectItem value={recruiter.id} key={recruiter.id}>
+                                  {recruiter.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -1130,53 +1162,53 @@ export default function DepartmentPage() {
                             <p className="text-sm text-muted-foreground mt-1">Add recruiters using the form above</p>
                           </div>
                         ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
                                 <TableHead className="font-semibold">Name</TableHead>
                                 <TableHead className="font-semibold">Email</TableHead>
                                 <TableHead className="font-semibold text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
                               {panelMembers.map((member) => (
                                 <TableRow key={member.id} className="hover:bg-muted/50">
                                   <TableCell className="font-medium">{member.name}</TableCell>
                                   <TableCell className="text-muted-foreground">{member.email}</TableCell>
                                   <TableCell className="text-right">
-                                <Button
+                                    <Button
                                       size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    if (!selectedPanel?.id) return;
-                                    const res = await removeRecruiterFromPanel(
-                                      member.id,
-                                      selectedPanel?.id
-                                    );
-                                    if (res) {
-                                      toast({ title: 'Success', description: 'Recruiter removed from panel successfully' });
-                                      setPanelMembers((prev) =>
-                                        prev.filter((m) => m.id !== member.id)
-                                      );
-                                    } else {
-                                      toast({ title: 'Error', description: 'Failed to remove recruiter', variant: 'destructive' });
-                                    }
-                                  }}
+                                      variant="outline"
+                                      onClick={async () => {
+                                        if (!selectedPanel?.id) return;
+                                        const res = await removeRecruiterFromPanel(
+                                          member.id,
+                                          selectedPanel?.id
+                                        );
+                                        if (res) {
+                                          toast({ title: 'Success', description: 'Recruiter removed from panel successfully' });
+                                          setPanelMembers((prev) =>
+                                            prev.filter((m) => m.id !== member.id)
+                                          );
+                                        } else {
+                                          toast({ title: 'Error', description: 'Failed to remove recruiter', variant: 'destructive' });
+                                        }
+                                      }}
                                       className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
-                                >
+                                    >
                                       <Trash2 className="h-4 w-4 mr-1" />
                                       Remove
-                                </Button>
-                              </TableCell>
-                            </TableRow>
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
                               ))}
-                      </TableBody>
-                    </Table>
+                            </TableBody>
+                          </Table>
                         )}
                       </div>
                     </div>
                   </TabsContent>
-                  
+
                   <TabsContent value="applicants" className="space-y-6">
                     <div className="bg-muted/30 rounded-lg p-4">
                       <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -1198,7 +1230,7 @@ export default function DepartmentPage() {
                           {shortlistedApplicants.length} shortlisted applicant{shortlistedApplicants.length !== 1 ? 's' : ''} found
                         </p>
                       </div>
-                      
+
                       <div className="overflow-x-auto">
                         {shortlistedApplicants.length === 0 ? (
                           <div className="p-8 text-center">
@@ -1208,24 +1240,24 @@ export default function DepartmentPage() {
                           </div>
                         ) : (
                           <Table>
-                      <TableHeader>
+                            <TableHeader>
                               <TableRow className="bg-muted/30">
                                 <TableHead className="font-semibold">Applicant Name</TableHead>
                                 <TableHead className="font-semibold">Email</TableHead>
                                 <TableHead className="font-semibold">Preference</TableHead>
                                 <TableHead className="font-semibold">Assignment Status</TableHead>
                                 <TableHead className="font-semibold text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
                               {shortlistedApplicants.map((a) => {
-                            
-                            const rows = [];
-                            if (a.preference === 'first' || a.preference === 'both') {
+
+                                const rows = [];
+                                if (a.preference === 'first' || a.preference === 'both') {
                                   const isAssignedToThisPanel = a.first_pref_panel_id === selectedPanel?.id;
                                   const isAssignedToOtherPanel = a.first_pref_panel_id && a.first_pref_panel_id !== selectedPanel?.id;
-                                  
-                              rows.push(
+
+                                  rows.push(
                                     <TableRow key={a.id + '-first'} className="hover:bg-muted/30">
                                       <TableCell className="font-medium">{a.name}</TableCell>
                                       <TableCell className="text-muted-foreground">{a.email}</TableCell>
@@ -1254,11 +1286,11 @@ export default function DepartmentPage() {
                                       </TableCell>
                                       <TableCell className="text-right">
                                         <div className="flex gap-2 justify-end">
-                                    <Button
-                                      size="sm"
+                                          <Button
+                                            size="sm"
                                             variant={isAssignedToThisPanel ? 'default' : 'outline'}
                                             disabled={isAssignedToThisPanel || isAssignedToOtherPanel}
-                                      onClick={() => handleAssignApplicantToPanel(a.id, 'first')}
+                                            onClick={() => handleAssignApplicantToPanel(a.id, 'first')}
                                             className={isAssignedToThisPanel ? 'bg-green-600 hover:bg-green-700' : ''}
                                           >
                                             {isAssignedToThisPanel ? (
@@ -1272,35 +1304,35 @@ export default function DepartmentPage() {
                                                 Assign
                                               </>
                                             )}
-                                    </Button>
+                                          </Button>
                                           {isAssignedToThisPanel && (
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={async () => {
-                                        try {
-                                          await removeApplicantFromPanel(a.id, 'first');
-                                          toast({ title: 'Removed', description: 'Applicant removed from panel' });
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              onClick={async () => {
+                                                try {
+                                                  await removeApplicantFromPanel(a.id, 'first');
+                                                  toast({ title: 'Removed', description: 'Applicant removed from panel' });
                                                   setShortlistedApplicants(await getShortlistedApplicantsWithAssignmentStatus(deptId, selectedPanel?.id));
-                                        } catch (err: any) {
-                                          toast({ title: 'Error', description: err?.message || 'Failed to remove', variant: 'destructive' });
-                                        }
-                                      }}
-                                    >
+                                                } catch (err: any) {
+                                                  toast({ title: 'Error', description: err?.message || 'Failed to remove', variant: 'destructive' });
+                                                }
+                                              }}
+                                            >
                                               <UserMinus className="h-3 w-3 mr-1" />
-                                      Remove
-                                    </Button>
+                                              Remove
+                                            </Button>
                                           )}
                                         </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            }
-                            if (a.preference === 'second' || a.preference === 'both') {
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                }
+                                if (a.preference === 'second' || a.preference === 'both') {
                                   const isAssignedToThisPanel = a.second_pref_panel_id === selectedPanel?.id;
                                   const isAssignedToOtherPanel = a.second_pref_panel_id && a.second_pref_panel_id !== selectedPanel?.id;
-                                  
-                              rows.push(
+
+                                  rows.push(
                                     <TableRow key={a.id + '-second'} className="hover:bg-muted/30">
                                       <TableCell className="font-medium">{a.name}</TableCell>
                                       <TableCell className="text-muted-foreground">{a.email}</TableCell>
@@ -1329,11 +1361,11 @@ export default function DepartmentPage() {
                                       </TableCell>
                                       <TableCell className="text-right">
                                         <div className="flex gap-2 justify-end">
-                                    <Button
-                                      size="sm"
+                                          <Button
+                                            size="sm"
                                             variant={isAssignedToThisPanel ? 'default' : 'outline'}
                                             disabled={isAssignedToThisPanel || isAssignedToOtherPanel}
-                                      onClick={() => handleAssignApplicantToPanel(a.id, 'second')}
+                                            onClick={() => handleAssignApplicantToPanel(a.id, 'second')}
                                             className={isAssignedToThisPanel ? 'bg-green-600 hover:bg-green-700' : ''}
                                           >
                                             {isAssignedToThisPanel ? (
@@ -1347,34 +1379,34 @@ export default function DepartmentPage() {
                                                 Assign
                                               </>
                                             )}
-                                    </Button>
+                                          </Button>
                                           {isAssignedToThisPanel && (
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={async () => {
-                                        try {
-                                          await removeApplicantFromPanel(a.id, 'second');
-                                          toast({ title: 'Removed', description: 'Applicant removed from panel' });
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              onClick={async () => {
+                                                try {
+                                                  await removeApplicantFromPanel(a.id, 'second');
+                                                  toast({ title: 'Removed', description: 'Applicant removed from panel' });
                                                   setShortlistedApplicants(await getShortlistedApplicantsWithAssignmentStatus(deptId, selectedPanel?.id));
-                                        } catch (err: any) {
-                                          toast({ title: 'Error', description: err?.message || 'Failed to remove', variant: 'destructive' });
-                                        }
-                                      }}
-                                    >
+                                                } catch (err: any) {
+                                                  toast({ title: 'Error', description: err?.message || 'Failed to remove', variant: 'destructive' });
+                                                }
+                                              }}
+                                            >
                                               <UserMinus className="h-3 w-3 mr-1" />
-                                      Remove
-                                    </Button>
+                                              Remove
+                                            </Button>
                                           )}
                                         </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            }
-                            return rows;
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                }
+                                return rows;
                               })}
-                      </TableBody>
-                    </Table>
+                            </TableBody>
+                          </Table>
                         )}
                       </div>
                     </div>
@@ -1407,7 +1439,7 @@ export default function DepartmentPage() {
                       if (data) {
                         setIsNewPanelDialogOpen(false);
                         toast({ title: 'Success', description: 'New panel created successfully' });
-                        setPanels([]); 
+                        setPanels([]);
                       } else {
                         toast({ title: 'Error', description: 'Failed to create new panel', variant: 'destructive' });
                       }
@@ -1537,16 +1569,16 @@ export default function DepartmentPage() {
                           Detailed scores and remarks from each evaluator
                         </p>
                       </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
                             <TableHead className="font-semibold">Evaluator</TableHead>
                             <TableHead className="font-semibold">Score</TableHead>
                             <TableHead className="font-semibold">Remarks</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {evaluations.map((evaluation) => (
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {evaluations.map((evaluation) => (
                             <TableRow key={evaluation.recruiter.full_name} className="hover:bg-muted/30">
                               <TableCell className="font-medium">{evaluation.recruiter.full_name}</TableCell>
                               <TableCell>
@@ -1555,11 +1587,26 @@ export default function DepartmentPage() {
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-muted-foreground">{evaluation.remarks}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
+                  </div>
+                ) : shortlistDeadline && new Date() <= shortlistDeadline ? (
+                  <div className="text-center py-12">
+                    <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-muted-foreground font-medium">Evaluations Not Available Yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Applicant marks and evaluations will be available after the shortlisting deadline passes.
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Shortlist deadline: {shortlistDeadline.toLocaleDateString('en-IN', { 
+                        timeZone: 'Asia/Kolkata',
+                        dateStyle: 'medium',
+                        timeStyle: 'short'
+                      })}
+                    </p>
                   </div>
                 ) : (
                   <div className="text-center py-12">
@@ -1602,11 +1649,20 @@ export default function DepartmentPage() {
                       <p className="text-sm">{selectedApplicant.register_no}</p>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium">Status</Label>
-                      <div className="mt-1">
-                        {getStatusBadge(
-                          getOverallApplicationStatus(selectedApplicant)
-                        )}
+                      <Label className="text-sm font-medium">Department Status</Label>
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{firstPrefDeptName}:</span>
+                          <div className="ml-2">
+                            {getStatusBadge(selectedApplicant.first_pref_status)}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{secondPrefDeptName}:</span>
+                          <div className="ml-2">
+                            {getStatusBadge(selectedApplicant.second_pref_status)}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1616,7 +1672,12 @@ export default function DepartmentPage() {
                       <Label className="text-sm font-medium">
                         First Preference
                       </Label>
-                      <p className="text-sm font-medium">{firstPrefDeptName}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">{firstPrefDeptName}</p>
+                        <div className="ml-2">
+                          {getStatusBadge(selectedApplicant.first_pref_status)}
+                        </div>
+                      </div>
                       <p className="text-sm text-muted-foreground mt-1">
                         {selectedApplicant.first_pref_reason}
                       </p>
@@ -1626,9 +1687,14 @@ export default function DepartmentPage() {
                       <Label className="text-sm font-medium">
                         Second Preference
                       </Label>
-                      <p className="text-sm font-medium">
-                        {secondPrefDeptName}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">
+                          {secondPrefDeptName}
+                        </p>
+                        <div className="ml-2">
+                          {getStatusBadge(selectedApplicant.second_pref_status)}
+                        </div>
+                      </div>
                       <p className="text-sm text-muted-foreground mt-1">
                         {selectedApplicant.second_pref_reason}
                       </p>
@@ -1719,7 +1785,7 @@ export default function DepartmentPage() {
                             getPreferenceType(selectedApplicant);
                           handleStatusUpdate(
                             selectedApplicant.id,
-                            "rejected",
+                            "not_selected",
                             preferenceType
                           );
                         }
