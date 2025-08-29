@@ -199,22 +199,26 @@ export default function RecruiterDashboard() {
       const isFirstPref = app.first_pref_dept_id === departmentId;
       const isSecondPref = app.second_pref_dept_id === departmentId;
 
-      let status = "pending";
+      let status = null;
       if (isFirstPref) {
-        status = app.first_pref_status || "pending";
+        status = app.first_pref_status;
       } else if (isSecondPref) {
-        status = app.second_pref_status || "pending";
+        status = app.second_pref_status;
       }
 
-      switch (status) {
-        case "shortlisted":
-          shortlistedCount++;
-          break;
-        case "rejected":
-          rejectedCount++;
-          break;
-        default:
-          pendingCount++;
+      if (status) {
+        switch (status) {
+          case "pending":
+            pendingCount++;
+            break;
+          case "shortlisted":
+            shortlistedCount++;
+            break;
+          case "rejected":
+          case "not_selected":
+            rejectedCount++;
+            break;
+        }
       }
     });
 
