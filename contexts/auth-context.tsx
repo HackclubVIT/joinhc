@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setIsHydrated(true)
     
-    // Show Firefox recommendation toast for non-Firefox browsers
+    
     const browser = detectBrowser()
     if (!browser.isFirefox) {
       toast({
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsInitialized(true)
 
                 supabase.auth.signOut().catch(() => {
-                  // Ignore errors since we're forcing logout anyway
+                  
                 })
 
                 toast({

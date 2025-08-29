@@ -59,6 +59,7 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import {
   getDepartmentApplicants,
+  getDepartmentApplicantsOptimized,
   getDepartmentNameById,
   updateApplicationStatus,
   getOverallApplicationStatus,
@@ -157,6 +158,7 @@ export default function DepartmentPage() {
 
   const [applicationDeadline, setApplicationDeadline] = useState<Date | null>(null);
   const [shortlistDeadline, setShortlistDeadline] = useState<Date | null>(null);
+  const [deadlinesLoaded, setDeadlinesLoaded] = useState(false);
 
   const fetchPanelMembers = async () => {
     if (selectedPanel) {
@@ -174,26 +176,33 @@ export default function DepartmentPage() {
     fetchPanelMembers();
   }, [selectedPanel]);
 
-  useEffect(() => {
-    if (panelMembers.length > 0) return;
-
-    fetchPanelMembers();
-  }, [panelMembers]);
+  
+  
 
   useEffect(() => {
     const fetchData = async () => {
       if (selectedApplicant) {
-        const [marks, average] = await Promise.all([
-          getApplicantMarks(selectedApplicant.id, deptId),
-          getApplicantAverageMarks(selectedApplicant.id, deptId)
-        ]);
-        setEvaluations(marks);
-        setAverageMarks(average);
+        
+        const now = new Date();
+        const shouldFetchEvaluations = shortlistDeadline && now > shortlistDeadline;
+        
+        if (shouldFetchEvaluations) {
+          const [marks, average] = await Promise.all([
+            getApplicantMarks(selectedApplicant.id, deptId),
+            getApplicantAverageMarks(selectedApplicant.id, deptId)
+          ]);
+          setEvaluations(marks);
+          setAverageMarks(average);
+        } else {
+          
+          setEvaluations([]);
+          setAverageMarks(null);
+        }
       }
     };
 
     fetchData();
-  }, [isMarksDialogOpen, selectedApplicant, deptId]);
+  }, [isMarksDialogOpen, selectedApplicant, deptId, shortlistDeadline]);
 
   useEffect(() => {
     if (panels.length > 0) return;
@@ -208,7 +217,7 @@ export default function DepartmentPage() {
     };
 
     fetchPanels();
-  }, [panels]);
+  }, [deptId]); 
 
   useEffect(() => {
     const fetchDeptName = async () => {
@@ -221,26 +230,38 @@ export default function DepartmentPage() {
   useEffect(() => {
     const fetchApplicants = async () => {
       try {
-        const data = await getDepartmentApplicants(deptId);
+        
+        if (!deadlinesLoaded) return;
+
+        
+        const appDeadlineObj = applicationDeadline ? { deadline: applicationDeadline.toISOString() } : null;
+        const shortlistDeadlineObj = shortlistDeadline ? { deadline: shortlistDeadline.toISOString() } : null;
+
+        const data = await getDepartmentApplicantsOptimized(deptId, appDeadlineObj, shortlistDeadlineObj);
         setApplicants(data);
 
+        
+        const now = new Date();
+        const shouldFetchEvaluations = shortlistDeadline && now > shortlistDeadline;
 
         const averages: { [applicantId: string]: { average: number; totalEvaluators: number } | null } = {};
 
-        for (const applicant of data) {
-          try {
-            const avgData = await getApplicantAverageMarks(applicant.id, deptId);
-            if (avgData) {
-              averages[applicant.id] = {
-                average: avgData.average,
-                totalEvaluators: avgData.totalEvaluators
-              };
-            } else {
+        if (shouldFetchEvaluations) {
+          for (const applicant of data) {
+            try {
+              const avgData = await getApplicantAverageMarks(applicant.id, deptId);
+              if (avgData) {
+                averages[applicant.id] = {
+                  average: avgData.average,
+                  totalEvaluators: avgData.totalEvaluators
+                };
+              } else {
+                averages[applicant.id] = null;
+              }
+            } catch (err) {
+              console.error(`Error fetching average for applicant ${applicant.id}:`, err);
               averages[applicant.id] = null;
             }
-          } catch (err) {
-            console.error(`Error fetching average for applicant ${applicant.id}:`, err);
-            averages[applicant.id] = null;
           }
         }
 
@@ -252,8 +273,11 @@ export default function DepartmentPage() {
       }
     };
 
-    fetchApplicants();
-  }, [deptId]);
+    
+    if (deadlinesLoaded) {
+      fetchApplicants();
+    }
+  }, [deptId, shortlistDeadline, deadlinesLoaded]); 
 
   useEffect(() => {
     const filtered = applicants.filter((applicant) => {
@@ -264,7 +288,7 @@ export default function DepartmentPage() {
           ?.toLowerCase()
           .includes(searchQuery.toLowerCase());
 
-      // Get the status for the current department instead of overall status
+      
       let currentDeptStatus = "";
       if (applicant.first_pref_dept_id === deptId) {
         currentDeptStatus = applicant.first_pref_status;
@@ -301,6 +325,8 @@ export default function DepartmentPage() {
       } catch (err) {
         setApplicationDeadline(null);
         setShortlistDeadline(null);
+      } finally {
+        setDeadlinesLoaded(true); // Mark deadlines as loaded
       }
     }
     fetchDeadlines();
@@ -425,7 +451,7 @@ export default function DepartmentPage() {
       (app) => app.second_pref_dept_id === deptId
     ).length,
     pendingCount: applicants.filter((app) => {
-      // Count pending applications for this specific department
+      
       if (app.first_pref_dept_id === deptId) {
         return app.first_pref_status === "pending";
       } else if (app.second_pref_dept_id === deptId) {
@@ -434,7 +460,7 @@ export default function DepartmentPage() {
       return false;
     }).length,
     shortlistedCount: applicants.filter((app) => {
-      // Count shortlisted applications for this specific department
+      
       if (app.first_pref_dept_id === deptId) {
         return app.first_pref_status === "shortlisted";
       } else if (app.second_pref_dept_id === deptId) {
@@ -443,7 +469,7 @@ export default function DepartmentPage() {
       return false;
     }).length,
     notSelectedCount: applicants.filter((app) => {
-      // Count not selected applications for this specific department
+      
       if (app.first_pref_dept_id === deptId) {
         return app.first_pref_status === "not_selected";
       } else if (app.second_pref_dept_id === deptId) {
@@ -452,7 +478,7 @@ export default function DepartmentPage() {
       return false;
     }).length,
     acceptedCount: applicants.filter((app) => {
-      // Count accepted applications for this specific department
+      
       if (app.first_pref_dept_id === deptId) {
         return app.first_pref_status === "accepted";
       } else if (app.second_pref_dept_id === deptId) {
@@ -461,7 +487,7 @@ export default function DepartmentPage() {
       return false;
     }).length,
     rejectedCount: applicants.filter((app) => {
-      // Count rejected applications for this specific department
+      
       if (app.first_pref_dept_id === deptId) {
         return app.first_pref_status === "rejected";
       } else if (app.second_pref_dept_id === deptId) {
@@ -993,21 +1019,24 @@ export default function DepartmentPage() {
                                 <div className="flex flex-wrap gap-2 items-center">
                                   {canPanel && (
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                          setSelectedApplicant(applicant);
-                                          setIsMarksDialogOpen(true);
-                                        }}
-                                        className="border-2 text-xs sm:text-sm"
-                                      >
-                                        <NotebookText className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                                        <span className="hidden sm:inline">View Marks</span>
-                                        <span className="sm:hidden">Marks</span>
-                                      </Button>
-                                      {/* Average Marks Indicator */}
-                                      {applicantAverages[applicant.id] && (
+                                      {/* Only show View Marks button if shortlisting deadline has passed (interview phase) */}
+                                      {shortlistDeadline && new Date() > shortlistDeadline && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setSelectedApplicant(applicant);
+                                            setIsMarksDialogOpen(true);
+                                          }}
+                                          className="border-2 text-xs sm:text-sm"
+                                        >
+                                          <NotebookText className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                                          <span className="hidden sm:inline">View Marks</span>
+                                          <span className="sm:hidden">Marks</span>
+                                        </Button>
+                                      )}
+                                      {/* Average Marks Indicator - only show when deadline has passed */}
+                                      {applicantAverages[applicant.id] && shortlistDeadline && new Date() > shortlistDeadline && (
                                         <Badge
                                           variant="outline"
                                           className={`text-xs ${getAverageScoreBadge(applicantAverages[applicant.id]!.average)}`}
@@ -1563,6 +1592,21 @@ export default function DepartmentPage() {
                         </TableBody>
                       </Table>
                     </div>
+                  </div>
+                ) : shortlistDeadline && new Date() <= shortlistDeadline ? (
+                  <div className="text-center py-12">
+                    <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-muted-foreground font-medium">Evaluations Not Available Yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Applicant marks and evaluations will be available after the shortlisting deadline passes.
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Shortlist deadline: {shortlistDeadline.toLocaleDateString('en-IN', { 
+                        timeZone: 'Asia/Kolkata',
+                        dateStyle: 'medium',
+                        timeStyle: 'short'
+                      })}
+                    </p>
                   </div>
                 ) : (
                   <div className="text-center py-12">
