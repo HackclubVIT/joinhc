@@ -610,6 +610,34 @@ export async function removeApplicantFromPanel(applicantId: string, preference: 
 }
 
 
+
+export async function getAllDeadlines() {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("application_settings")
+      .select("deadline_name, deadline")
+      .in('deadline_name', ['application', 'shortlist']);
+
+    if (error) {
+      console.error("Error fetching deadlines:", error);
+      return { applicationDeadline: null, shortlistDeadline: null };
+    }
+
+    const applicationDeadline = data?.find(d => d.deadline_name === 'application')?.deadline;
+    const shortlistDeadline = data?.find(d => d.deadline_name === 'shortlist')?.deadline;
+
+    return {
+      applicationDeadline: applicationDeadline ? { deadline: applicationDeadline } : null,
+      shortlistDeadline: shortlistDeadline ? { deadline: shortlistDeadline } : null
+    };
+  } catch (err) {
+    console.error("Error in getAllDeadlines:", err);
+    return { applicationDeadline: null, shortlistDeadline: null };
+  }
+}
+
 export async function getApplicationDeadline() {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -1490,6 +1518,37 @@ export const getMeetLinkByPanelId = async (panel_id: string) => {
   }
 };
 
+
+export const getMeetLinksByPanelIds = async (firstPanelId: string | null, secondPanelId: string | null) => {
+  const supabase = createClient();
+
+  try {
+    const panelIds = [firstPanelId, secondPanelId].filter(Boolean);
+    
+    if (panelIds.length === 0) {
+      return { first: null, second: null };
+    }
+
+    const { data, error } = await supabase
+      .from("recruitment_panel")
+      .select("id, meet_link")
+      .in("id", panelIds);
+
+    if (error) {
+      console.error("Error fetching meet links:", error);
+      return { first: null, second: null };
+    }
+
+    const firstLink = data?.find(p => p.id === firstPanelId)?.meet_link || null;
+    const secondLink = data?.find(p => p.id === secondPanelId)?.meet_link || null;
+
+    return { first: firstLink, second: secondLink };
+  } catch (err) {
+    console.error("Error in getMeetLinksByPanelIds:", err);
+    return { first: null, second: null };
+  }
+};
+
 export async function getDepartmentApplicants(departmentId: string) {
   const supabase = createClient();
 
@@ -1560,10 +1619,7 @@ export async function getDepartmentApplicants(departmentId: string) {
       .from("applications")
       .select("*")
       .or(
-        `first_pref_dept_id.eq.${normalizedId},second_pref_dept_id.eq.${normalizedId}`
-      )
-      .or(
-        `first_pref_status.in.(${statusFilter.join(',')}),second_pref_status.in.(${statusFilter.join(',')})`
+        `and(first_pref_dept_id.eq.${normalizedId},first_pref_status.in.(${statusFilter.join(',')})),and(second_pref_dept_id.eq.${normalizedId},second_pref_status.in.(${statusFilter.join(',')}))`
       )
       .order("created_at", { ascending: false });
 
@@ -1645,10 +1701,7 @@ export async function getDepartmentApplicantsOptimized(
       .from("applications")
       .select("*")
       .or(
-        `first_pref_dept_id.eq.${normalizedId},second_pref_dept_id.eq.${normalizedId}`
-      )
-      .or(
-        `first_pref_status.in.(${statusFilter.join(',')}),second_pref_status.in.(${statusFilter.join(',')})`
+        `and(first_pref_dept_id.eq.${normalizedId},first_pref_status.in.(${statusFilter.join(',')})),and(second_pref_dept_id.eq.${normalizedId},second_pref_status.in.(${statusFilter.join(',')}))`
       )
       .order("created_at", { ascending: false });
 
@@ -2081,5 +2134,144 @@ export async function getPendingApplicantsForExport() {
   } catch (error) {
     console.error('Error in getPendingApplicantsForExport:', error);
     throw error;
+  }
+}
+
+
+export async function getRecruiterDashboardDataOptimized(
+  recruiterId: string,
+  appDeadline: { deadline: string } | null,
+  shortlistDeadline: { deadline: string } | null
+) {
+  const supabase = createClient();
+
+  try {
+    
+    const { data: recruiterDepts, error: deptError } = await supabase
+      .from("recruiter_departments")
+      .select(`
+        *,
+        department:departments(id, name, description)
+      `)
+      .eq("recruiter_id", recruiterId);
+
+    if (deptError) {
+      console.error("Error fetching recruiter departments:", deptError);
+      return { departments: [], panels: [] };
+    }
+
+    if (!recruiterDepts || recruiterDepts.length === 0) {
+      return { departments: [], panels: [] };
+    }
+
+    
+    const departmentIds = recruiterDepts
+      .map(dept => dept.department?.id || dept.department_id)
+      .filter(Boolean);
+
+    
+    let applicationsQuery = supabase
+      .from('applications')
+      .select('*')
+      .or(
+        departmentIds.map(id => 
+          `first_pref_dept_id.eq.${id},second_pref_dept_id.eq.${id}`
+        ).join(',')
+      );
+
+    
+    if (appDeadline) {
+      applicationsQuery = applicationsQuery.lte('created_at', appDeadline.deadline);
+    }
+
+    const { data: allApplications, error: appError } = await applicationsQuery;
+
+    if (appError) {
+      console.error("Error fetching applications:", appError);
+      return { departments: [], panels: [] };
+    }
+
+    
+    const { data: userPanelData, error: userPanelError } = await supabase
+      .from("recruiter_departments")
+      .select("panel: recruitment_panel(id, name)")
+      .eq("recruiter_id", recruiterId)
+      .not("panel_id", "is", null);
+
+    let panels: any[] = [];
+    if (!userPanelError && userPanelData) {
+      panels = userPanelData.map((e) => e.panel as unknown as { id: string; name: string }).filter(Boolean);
+    }
+
+    
+    const departmentStats = recruiterDepts.map(dept => {
+      const deptId = dept.department?.id || dept.department_id;
+      const deptApplications = (allApplications || []).filter(app => 
+        app.first_pref_dept_id === deptId || app.second_pref_dept_id === deptId
+      );
+
+      
+      const totalApplicants = deptApplications.length;
+      const firstPrefCount = deptApplications.filter(app => app.first_pref_dept_id === deptId).length;
+      const secondPrefCount = deptApplications.filter(app => app.second_pref_dept_id === deptId).length;
+
+      let pendingCount = 0;
+      let shortlistedCount = 0;
+      let rejectedCount = 0;
+      let acceptedCount = 0;
+
+      deptApplications.forEach(app => {
+        const isFirstPref = app.first_pref_dept_id === deptId;
+        const isSecondPref = app.second_pref_dept_id === deptId;
+
+        let status = null;
+        if (isFirstPref) {
+          status = app.first_pref_status;
+        } else if (isSecondPref) {
+          status = app.second_pref_status;
+        }
+
+        if (status) {
+          switch (status) {
+            case "pending":
+              pendingCount++;
+              break;
+            case "shortlisted":
+              shortlistedCount++;
+              break;
+            case "rejected":
+            case "not_selected":
+              rejectedCount++;
+              break;
+            case "accepted":
+              acceptedCount++;
+              break;
+          }
+        }
+      });
+
+      return {
+        id: deptId,
+        name: dept.department?.name || "Unknown Department",
+        role: dept.role,
+        totalApplicants,
+        firstPrefCount,
+        secondPrefCount,
+        pendingCount,
+        shortlistedCount,
+        rejectedCount,
+        acceptedCount,
+        panel_id: dept.panel_id
+      };
+    });
+
+    return {
+      departments: departmentStats,
+      panels: panels || []
+    };
+
+  } catch (error) {
+    console.error("Error in getRecruiterDashboardDataOptimized:", error);
+    return { departments: [], panels: [] };
   }
 }
