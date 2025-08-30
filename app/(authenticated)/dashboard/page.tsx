@@ -32,11 +32,10 @@ import {
   getApplicationForUser,
   getApplicationSettings,
   getDepartments,
-  getMeetLinkByPanelId,
+  getMeetLinksByPanelIds,
   getOverallApplicationStatus,
   getPreferenceSelectionInfo,
-  getApplicationDeadline,
-  getShortlistDeadline,
+  getAllDeadlines,
   getAvailableTimeSlotsForPanel,
   getApplicantTimeSlot,
   bookApplicantTimeSlot,
@@ -88,6 +87,13 @@ export default function ApplicantDashboard() {
     return new Date(
       new Date(date).toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
     );
+  };
+
+  const hasSlotPassed = (booking: any) => {
+    if (!booking || !booking.end_time) return false;
+    const now = toIST(new Date());
+    const endTime = toIST(booking.end_time);
+    return now > endTime;
   };
   const fetchSlotData = async (pref: Pref) => {
     setSlotLoading((l) => ({ ...l, [pref]: true }));
@@ -147,10 +153,9 @@ export default function ApplicantDashboard() {
           return;
         }
 
-        const [applicationData, applicationDeadline, shortlistDeadlineData, resultsPublicationDeadlineData, departments] = await Promise.all([
+        const [applicationData, deadlineData, resultsPublicationDeadlineData, departments] = await Promise.all([
           getApplicationForUser(),
-          getApplicationDeadline(),
-          getShortlistDeadline(),
+          getAllDeadlines(),
           getResultsPublicationDeadline(),
           getDepartments(),
         ]);
@@ -170,20 +175,20 @@ export default function ApplicantDashboard() {
           });
 
           
-          const [first, second] = await Promise.all([
-            getMeetLinkByPanelId(applicationData.first_pref_panel_id),
-            getMeetLinkByPanelId(applicationData.second_pref_panel_id),
-          ]);
+          const meetLinksData = await getMeetLinksByPanelIds(
+            applicationData.first_pref_panel_id,
+            applicationData.second_pref_panel_id
+          );
 
-          setMeetLinks({ first, second });
+          setMeetLinks(meetLinksData);
         }
 
-        if (applicationDeadline?.deadline) {
-          setDeadline(new Date(applicationDeadline.deadline));
+        if (deadlineData.applicationDeadline?.deadline) {
+          setDeadline(new Date(deadlineData.applicationDeadline.deadline));
         }
         
-        if (shortlistDeadlineData?.deadline) {
-          setShortlistDeadline(new Date(shortlistDeadlineData.deadline));
+        if (deadlineData.shortlistDeadline?.deadline) {
+          setShortlistDeadline(new Date(deadlineData.shortlistDeadline.deadline));
         }
         
         if (resultsPublicationDeadlineData) {
@@ -240,31 +245,59 @@ export default function ApplicantDashboard() {
     }
   };
 
+  const shouldShowResults = () => {
+    if (!resultsPublicationDeadline) return false;
+    const now = new Date();
+    return now >= resultsPublicationDeadline;
+  };
+
   const getStatusMessage = (application: any) => {
     const overallStatus = getOverallApplicationStatus(application);
     const selectedInfo = getPreferenceSelectionInfo(application);
+
+    
+    const resultsPublished = shouldShowResults();
 
     const bothAccepted =
       application.first_pref_status === "accepted" &&
       application.second_pref_status === "accepted";
 
-    
     const bothShortlisted =
       application.first_pref_status === "shortlisted" &&
       application.second_pref_status === "shortlisted";
 
+    
+    const anyShortlistedOrBetter = 
+      application.first_pref_status === "shortlisted" || 
+      application.first_pref_status === "accepted" ||
+      application.second_pref_status === "shortlisted" ||
+      application.second_pref_status === "accepted";
+
+    
+    const effectiveStatus = !resultsPublished && (overallStatus === "accepted" || overallStatus === "rejected") 
+      ? "shortlisted" 
+      : overallStatus;
+
     let selectedDepartment = null;
-    if (bothAccepted) {
+    if (bothAccepted && resultsPublished) {
       selectedDepartment = `both ${departmentNames.first} and ${departmentNames.second}`;
-    } else if (bothShortlisted) {
-      selectedDepartment = `both ${departmentNames.first} and ${departmentNames.second}`;
+    } else if (bothShortlisted || (!resultsPublished && anyShortlistedOrBetter)) {
+      
+      if ((application.first_pref_status === "shortlisted" || application.first_pref_status === "accepted") &&
+          (application.second_pref_status === "shortlisted" || application.second_pref_status === "accepted")) {
+        selectedDepartment = `both ${departmentNames.first} and ${departmentNames.second}`;
+      } else if (application.first_pref_status === "shortlisted" || application.first_pref_status === "accepted") {
+        selectedDepartment = departmentNames.first;
+      } else if (application.second_pref_status === "shortlisted" || application.second_pref_status === "accepted") {
+        selectedDepartment = departmentNames.second;
+      }
     } else if (selectedInfo.type === "first") {
       selectedDepartment = departmentNames.first;
     } else if (selectedInfo.type === "second") {
       selectedDepartment = departmentNames.second;
     }
 
-    switch (overallStatus) {
+    switch (effectiveStatus) {
       case "accepted":
         return {
           title: bothShortlisted
@@ -279,12 +312,17 @@ export default function ApplicantDashboard() {
         };
 
       case "shortlisted":
+        
+        const showingBothPrefs = selectedDepartment?.includes("both") || 
+          ((application.first_pref_status === "shortlisted" || (!resultsPublished && application.first_pref_status === "accepted")) &&
+           (application.second_pref_status === "shortlisted" || (!resultsPublished && application.second_pref_status === "accepted")));
+
         return {
-          title: bothShortlisted
+          title: showingBothPrefs
             ? "Congratulations! You've been shortlisted for both preferences! 🎉🎉"
             : "Congratulations! You've been shortlisted 🎉",
           description: selectedDepartment
-            ? bothShortlisted
+            ? showingBothPrefs
               ? `Amazing! You have been shortlisted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}.`
               : `You have been shortlisted for ${selectedDepartment}.`
             : "You have been shortlisted!",
@@ -317,7 +355,10 @@ export default function ApplicantDashboard() {
 
   const statusInfo = application ? getStatusMessage(application) : null;
   const overallStatus = application
-    ? getOverallApplicationStatus(application)
+    ? (shouldShowResults() ? getOverallApplicationStatus(application) : 
+       (getOverallApplicationStatus(application) === "accepted" || getOverallApplicationStatus(application) === "rejected") 
+       ? "shortlisted" 
+       : getOverallApplicationStatus(application))
     : "pending";
 
   const canShowMeetLink = (slot: any) => {
@@ -332,12 +373,6 @@ export default function ApplicantDashboard() {
     const d = toIST(date);
     if (isNaN(d.getTime())) return "—";
     return format(d, "yyyy-MM-dd HH:mm");
-  };
-
-  const shouldShowResults = () => {
-    if (!resultsPublicationDeadline) return false;
-    const now = new Date();
-    return now >= resultsPublicationDeadline;
   };
 
   const getStatusBadge = (status: string, preference: 'first' | 'second') => {
@@ -838,19 +873,38 @@ export default function ApplicantDashboard() {
                           </div>
                           
                           {/* Content Section */}
-                          {application.first_pref_status === "shortlisted" && (
+                          {(application.first_pref_status === "shortlisted" || 
+                            (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected"))) && (
                           <div className="mt-4">
-                            {!panelAssignments.first ? (
-                              <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                            {/* Congratulatory message for shortlisted applicants */}
+                            <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
+                              <div className="flex items-center gap-2">
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="font-semibold">Congratulations! 🎉</span>
+                              </div>
+                              <div className="text-xs text-green-300 mt-2">
+                                <p>You have been shortlisted and are through to the interview round for your first preference!</p>
+                              </div>
+                            </div>
+                            
+                            {/* Always show the ready message for shortlisted applicants */}
+                            {!evaluationStatus.first && (
+                              <div className="text-sm text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
                                 <div className="flex items-center gap-2">
                                   <Clock className="h-4 w-4" />
-                                  <span>Wait till the shortlist period to get over</span>
+                                  <span>Ready to book slots!</span>
                                 </div>
-                                <p className="text-xs text-amber-300 mt-1">
-                                  You'll be able to book slots once the shortlist period ends
-                                </p>
+                                <div className="text-xs text-blue-300 mt-2 space-y-1">
+                                  <p>• You can now book interview slots when they become available</p>
+                                  <p>• If no slots are visible, please wait for recruiters to schedule them</p>
+                                  <p>• You'll be added to the WhatsApp group soon for updates</p>
+                                </div>
                               </div>
-                            ) : evaluationStatus.first ? (
+                            )}
+                            
+                            {evaluationStatus.first ? (
                               <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
                                 <div className="flex items-center gap-2">
                                   <CheckCircle className="h-4 w-4" />
@@ -860,7 +914,7 @@ export default function ApplicantDashboard() {
                                   Your interview has been completed and evaluated
                                 </p>
                               </div>
-                            ) : (
+                            ) : panelAssignments.first && (
                               <>
                                 {/* Debug info for troubleshooting Join Meet button */}
                                 {slotData.first.booking && (
@@ -889,14 +943,17 @@ export default function ApplicantDashboard() {
                                     </div>
                                   </div>
                                 )}
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setOpenSlotModal('first')}
-                                  disabled={evaluationStatus.first}
-                                  className="mb-2 w-full sm:w-auto text-sm sm:text-base"
-                                >
-                                  Book/Manage Slot
-                                </Button>
+                                {/* Only show Book/Manage Slot button if slot hasn't passed */}
+                                {!hasSlotPassed(slotData.first.booking) && (
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setOpenSlotModal('first')}
+                                    disabled={evaluationStatus.first}
+                                    className="mb-2 w-full sm:w-auto text-sm sm:text-base"
+                                  >
+                                    Book/Manage Slot
+                                  </Button>
+                                )}
                               </>
                             )}
                             <Dialog open={openSlotModal === 'first'} onOpenChange={(open) => setOpenSlotModal(open ? 'first' : null)}>
@@ -975,6 +1032,24 @@ export default function ApplicantDashboard() {
                             </Dialog>
                           </div>
                         )}
+                        
+                        {/* Rejection Message for First Preference */}
+                        {(application.first_pref_status === "not_selected" || application.first_pref_status === "rejected") && (
+                          <div className="mt-4">
+                            <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                              <div className="flex items-center gap-2">
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                <span>Application not selected</span>
+                              </div>
+                              <div className="text-xs text-red-300 mt-2 space-y-1">
+                                <p>We appreciate your interest in this department. While we couldn't move forward this time, we encourage you to apply again in future opportunities.</p>
+                                <p>Keep developing your skills - we hope to see you again next time! 🚀</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         </div>
                       </div>
 
@@ -1050,19 +1125,38 @@ export default function ApplicantDashboard() {
                           </div>
                           
                           {/* Content Section */}
-                          {application.second_pref_status === "shortlisted" && (
+                          {(application.second_pref_status === "shortlisted" || 
+                            (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected"))) && (
                             <div className="mt-4">
-                              {!panelAssignments.second ? (
-                                <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                              {/* Congratulatory message for shortlisted applicants */}
+                              <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
+                                <div className="flex items-center gap-2">
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span className="font-semibold">Congratulations! 🎉</span>
+                                </div>
+                                <div className="text-xs text-green-300 mt-2">
+                                  <p>You have been shortlisted and are through to the interview round for your second preference!</p>
+                                </div>
+                              </div>
+                              
+                              {/* Always show the ready message for shortlisted applicants */}
+                              {!evaluationStatus.second && (
+                                <div className="text-sm text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
                                   <div className="flex items-center gap-2">
                                     <Clock className="h-4 w-4" />
-                                    <span>Wait till the shortlist period to get over</span>
+                                    <span>Ready to book slots!</span>
                                   </div>
-                                  <p className="text-xs text-amber-300 mt-1">
-                                    You'll be able to book slots once the shortlist period ends
-                                  </p>
+                                  <div className="text-xs text-blue-300 mt-2 space-y-1">
+                                    <p>• You can now book interview slots when they become available</p>
+                                    <p>• If no slots are visible, please wait for recruiters to schedule them</p>
+                                    <p>• You'll be added to the WhatsApp group soon for updates</p>
+                                  </div>
                                 </div>
-                              ) : evaluationStatus.second ? (
+                              )}
+                              
+                              {evaluationStatus.second ? (
                                 <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
                                   <div className="flex items-center gap-2">
                                     <CheckCircle className="h-4 w-4" />
@@ -1072,7 +1166,7 @@ export default function ApplicantDashboard() {
                                     Your interview has been completed and evaluated
                                   </p>
                                 </div>
-                              ) : (
+                              ) : panelAssignments.second && (
                                 <>
                                   {/* Debug info for troubleshooting Join Meet button */}
                                   {slotData.second.booking && (
@@ -1101,17 +1195,20 @@ export default function ApplicantDashboard() {
                                     </div>
                                   </div>
                                 )}
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setOpenSlotModal('second')}
-                                  disabled={evaluationStatus.second}
-                                  className="mb-2 w-full sm:w-auto text-sm sm:text-base"
-                                >
-                                  Book/Manage Slot
-                                </Button>
+                                {/* Only show Book/Manage Slot button if slot hasn't passed */}
+                                {!hasSlotPassed(slotData.second.booking) && (
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setOpenSlotModal('second')}
+                                    disabled={evaluationStatus.second}
+                                    className="mb-2 w-full sm:w-auto text-sm sm:text-base"
+                                  >
+                                    Book/Manage Slot
+                                  </Button>
+                                )}
                               </>
                             )}
-                              <Dialog open={openSlotModal === 'second'} onOpenChange={(open) => setOpenSlotModal(open ? 'second' : null)}>
+                            <Dialog open={openSlotModal === 'second'} onOpenChange={(open) => setOpenSlotModal(open ? 'second' : null)}>
                                 <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
                                   <DialogHeader>
                                     <DialogTitle>Second Preference Slot Booking</DialogTitle>
@@ -1185,6 +1282,24 @@ export default function ApplicantDashboard() {
                                   )}
                                 </DialogContent>
                               </Dialog>
+                            </div>
+                          )}
+                          
+                          {/* Rejection Message for Second Preference */}
+                          {(application.second_pref_status === "not_selected" || application.second_pref_status === "rejected") && (
+                            <div className="mt-4">
+                              <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                                <div className="flex items-center gap-2">
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                  <span>Application not selected</span>
+                                </div>
+                                <div className="text-xs text-red-300 mt-2 space-y-1">
+                                  <p>We appreciate your interest in this department. While we couldn't move forward this time, we encourage you to apply again in future opportunities.</p>
+                                  <p>Keep developing your skills - we hope to see you again next time! 🚀</p>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>

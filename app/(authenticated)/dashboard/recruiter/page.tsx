@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,20 +23,15 @@ import {
   Download,
   Filter,
   Search,
-  Calendar,
   BarChart3,
+  UserCheck,
+  XCircle,
 } from "lucide-react";
 import {
-  getRecruiterDepartments,
   getAllApplicationsForExport,
-  getDepartmentApplicants,
-  getDepartmentApplicantsOptimized,
-  getDepartmentNameById,
-  getApplicationSettings,
   isCurrentUserRecruiterOrEvaluator,
-  getPanelsForUser,
-  getApplicationDeadline,
-  getShortlistDeadline,
+  getAllDeadlines,
+  getRecruiterDashboardDataOptimized,
 } from "@/lib/supabase/data-fetching";
 import { useAuth } from "@/contexts/auth-context";
 import { HackClubLogo } from "@/components/hackclub-logo";
@@ -50,6 +45,7 @@ type DepartmentStats = {
   pendingCount: number;
   shortlistedCount: number;
   rejectedCount: number;
+  acceptedCount: number;
   role: "recruiter" | "evaluator";
   panel_id?: string;
 };
@@ -70,41 +66,40 @@ export default function RecruiterDashboard() {
     totalPending: 0,
     totalShortlisted: 0,
     totalRejected: 0,
+    totalAccepted: 0,
   });
-  const [deadline, setDeadline] = useState<Date | null>(null);
   const [applicationDeadline, setApplicationDeadline] = useState<Date | null>(null);
   const [shortlistDeadline, setShortlistDeadline] = useState<Date | null>(null);
   const [deadlinesLoaded, setDeadlinesLoaded] = useState(false);
 
   useEffect(() => {
     const fetchDeadlines = async () => {
+      console.log('🕒 Fetching deadlines...');
       try {
-        const [appDL, shortDL, settingsData] = await Promise.all([
-          getApplicationDeadline(),
-          getShortlistDeadline(),
-          getApplicationSettings(),
-        ]);
+        const { applicationDeadline, shortlistDeadline } = await getAllDeadlines();
         
-        setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
-        setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
+        setApplicationDeadline(applicationDeadline?.deadline ? new Date(applicationDeadline.deadline) : null);
+        setShortlistDeadline(shortlistDeadline?.deadline ? new Date(shortlistDeadline.deadline) : null);
         
-        if (settingsData?.deadline) {
-          setDeadline(new Date(settingsData.deadline));
-        }
+        console.log('✅ Deadlines fetched successfully');
       } catch (err) {
+        console.error('❌ Error fetching deadlines:', err);
         setApplicationDeadline(null);
         setShortlistDeadline(null);
-        setDeadline(null);
       } finally {
         setDeadlinesLoaded(true);
       }
     };
 
-    fetchDeadlines();
-  }, [user, userRole]);
+    
+    if (user && !deadlinesLoaded) {
+      fetchDeadlines();
+    }
+  }, [user]); 
 
   useEffect(() => {
     const fetchData = async () => {
+      console.log('📊 Fetching dashboard data...');
       try {
         if (!user || !deadlinesLoaded) {
           setIsLoading(false);
@@ -117,54 +112,39 @@ export default function RecruiterDashboard() {
           return;
         }
 
-        const recruiterDepts = await getRecruiterDepartments(user.id);
+        
+        const appDeadlineObj = applicationDeadline ? { deadline: applicationDeadline.toISOString() } : null;
+        const shortlistDeadlineObj = shortlistDeadline ? { deadline: shortlistDeadline.toISOString() } : null;
+        
+        const { departments: departmentStats, panels: userPanels } = await getRecruiterDashboardDataOptimized(
+          user.id,
+          appDeadlineObj,
+          shortlistDeadlineObj
+        );
 
-        const departmentStats: DepartmentStats[] = [];
+        
         let overallStats = {
           totalApplicants: 0,
           totalPending: 0,
           totalShortlisted: 0,
           totalRejected: 0,
+          totalAccepted: 0,
         };
 
-        setPanels(await getPanelsForUser(user.id));
-        
-        for (const dept of recruiterDepts) {
-          if (dept.department_id) {
-            
-            const appDeadlineObj = applicationDeadline ? { deadline: applicationDeadline.toISOString() } : null;
-            const shortlistDeadlineObj = shortlistDeadline ? { deadline: shortlistDeadline.toISOString() } : null;
-            
-            
-            const [applicants, deptName] = await Promise.all([
-              getDepartmentApplicantsOptimized(dept.department_id, appDeadlineObj, shortlistDeadlineObj),
-              getDepartmentNameById(dept.department_id),
-            ]);
-
-            const stats = calculateDepartmentStats(
-              applicants,
-              dept.department_id
-            );
-            const departmentStat: DepartmentStats = {
-              id: dept.department_id,
-              name: deptName || dept.department?.name || "Unknown Department",
-              role: dept.role,
-              ...stats,
-            };
-
-            departmentStats.push(departmentStat);
-
-            overallStats.totalApplicants += stats.totalApplicants;
-            overallStats.totalPending += stats.pendingCount;
-            overallStats.totalShortlisted += stats.shortlistedCount;
-            overallStats.totalRejected += stats.rejectedCount;
-          }
-        }
+        departmentStats.forEach(stats => {
+          overallStats.totalApplicants += stats.totalApplicants;
+          overallStats.totalPending += stats.pendingCount;
+          overallStats.totalShortlisted += stats.shortlistedCount;
+          overallStats.totalRejected += stats.rejectedCount;
+          overallStats.totalAccepted += stats.acceptedCount;
+        });
 
         setDepartments(departmentStats);
+        setPanels(userPanels);
         setTotalStats(overallStats);
+        console.log('✅ Dashboard data fetched successfully');
       } catch (err) {
-        console.error("Error fetching recruiter dashboard data:", err);
+        console.error("❌ Error fetching recruiter dashboard data:", err);
       } finally {
         setIsLoading(false);
       }
@@ -174,62 +154,66 @@ export default function RecruiterDashboard() {
     if (deadlinesLoaded) {
       fetchData();
     }
-  }, [user, userRole, deadlinesLoaded]);
+  }, [user, userRole, deadlinesLoaded, applicationDeadline, shortlistDeadline]);
 
   const now = new Date();
   const canPanel = shortlistDeadline && now > shortlistDeadline;
 
-  const calculateDepartmentStats = (
-    applicants: any[],
-    departmentId: string
-  ) => {
-    const totalApplicants = applicants.length;
-    const firstPrefCount = applicants.filter(
-      (app) => app.first_pref_dept_id === departmentId
-    ).length;
-    const secondPrefCount = applicants.filter(
-      (app) => app.second_pref_dept_id === departmentId
-    ).length;
+  
+  const isBeforeShortlistDeadline = () => {
+    return shortlistDeadline && now < shortlistDeadline;
+  };
 
-    let pendingCount = 0;
-    let shortlistedCount = 0;
-    let rejectedCount = 0;
+  const isAfterShortlistDeadline = () => {
+    return shortlistDeadline && now >= shortlistDeadline;
+  };
 
-    applicants.forEach((app) => {
-      const isFirstPref = app.first_pref_dept_id === departmentId;
-      const isSecondPref = app.second_pref_dept_id === departmentId;
-
-      let status = null;
-      if (isFirstPref) {
-        status = app.first_pref_status;
-      } else if (isSecondPref) {
-        status = app.second_pref_status;
-      }
-
-      if (status) {
-        switch (status) {
-          case "pending":
-            pendingCount++;
-            break;
-          case "shortlisted":
-            shortlistedCount++;
-            break;
-          case "rejected":
-          case "not_selected":
-            rejectedCount++;
-            break;
-        }
-      }
-    });
-
-    return {
-      totalApplicants,
-      firstPrefCount,
-      secondPrefCount,
-      pendingCount,
-      shortlistedCount,
-      rejectedCount,
-    };
+  const getPhaseAppropriateStats = () => {
+    if (isBeforeShortlistDeadline()) {
+      
+      return [
+        {
+          value: totalStats.totalApplicants,
+          label: "Total Applications Received",
+          icon: Users,
+          color: "blue",
+        },
+        {
+          value: totalStats.totalPending,
+          label: "Pending Review",
+          icon: Clock,
+          color: "yellow",
+        },
+        {
+          value: totalStats.totalShortlisted,
+          label: "Shortlisted",
+          icon: CheckCircle,
+          color: "green",
+        },
+      ];
+    } else {
+      
+      return [
+        {
+          value: totalStats.totalApplicants,
+          label: "Total Applications Received",
+          icon: Users,
+          color: "blue",
+        },
+        {
+          value: totalStats.totalShortlisted,
+          label: "Total Shortlisted",
+          icon: CheckCircle,
+          color: "green",
+        },
+        {
+          value: totalStats.totalAccepted,
+          label: "Accepted Applications",
+          icon: UserCheck,
+          color: "emerald",
+        },
+      ];
+    }
   };
 
   const filteredDepartments = departments.filter(
@@ -313,6 +297,27 @@ export default function RecruiterDashboard() {
             </span>
           </div>
 
+          {/* Recruitment Phase Indicator */}
+          <div className="flex justify-center mb-4 sm:mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border/50 bg-background/50">
+              {isBeforeShortlistDeadline() ? (
+                <>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium text-blue-400">
+                    Application Review Phase
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium text-green-400">
+                    Interview & Selection Phase
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="flex justify-center mb-4 sm:mb-6">
             <div className="relative floating-element">
               <div className="absolute inset-0 blur-2xl opacity-30">
@@ -330,62 +335,76 @@ export default function RecruiterDashboard() {
             Tech. <span className="gradient-text">Meets.</span> Innovation
           </h1>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 max-w-2xl mx-auto">
-            Manage applications, review candidates, and track recruitment progress.
+            {isBeforeShortlistDeadline() 
+              ? "Review applications, shortlist candidates, and prepare for the interview phase."
+              : "Conduct interviews, finalize selections, and manage the recruitment process."
+            }
           </p>
-
-          {deadline && (
-            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-amber-500/20 border border-amber-500/30">
-              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-amber-400" />
-              <span className="text-xs sm:text-sm font-medium text-amber-300">
-                Application Deadline: {deadline.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Overall Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-6 sm:mb-8">
-          <div className="stats-card min-w-0">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xl sm:text-2xl font-black gradient-text">
-                {totalStats.totalApplicants}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 md:gap-4 mb-6 sm:mb-8">
+          {getPhaseAppropriateStats().map((stat, index) => {
+            const IconComponent = stat.icon;
+            const getColorClasses = (color: string) => {
+              switch (color) {
+                case "blue":
+                  return {
+                    text: "gradient-text",
+                    bg: "bg-blue-500/20",
+                    icon: "text-blue-400",
+                  };
+                case "yellow":
+                  return {
+                    text: "gradient-text-accent",
+                    bg: "bg-yellow-500/20",
+                    icon: "text-yellow-400",
+                  };
+                case "green":
+                  return {
+                    text: "text-green-600",
+                    bg: "bg-green-500/20",
+                    icon: "text-green-400",
+                  };
+                case "emerald":
+                  return {
+                    text: "text-emerald-600",
+                    bg: "bg-emerald-500/20",
+                    icon: "text-emerald-400",
+                  };
+                case "red":
+                  return {
+                    text: "text-red-600",
+                    bg: "bg-red-500/20",
+                    icon: "text-red-400",
+                  };
+                default:
+                  return {
+                    text: "gradient-text",
+                    bg: "bg-gray-500/20",
+                    icon: "text-gray-400",
+                  };
+              }
+            };
+            
+            const colors = getColorClasses(stat.color);
+            
+            return (
+              <div key={index} className="stats-card min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <div className={`text-xl sm:text-2xl font-black ${colors.text}`}>
+                    {stat.value}
+                  </div>
+                  <div className={`p-1.5 sm:p-2 rounded-xl ${colors.bg}`}>
+                    <IconComponent className={`h-3 w-3 sm:h-4 sm:w-4 ${colors.icon}`} />
+                  </div>
+                </div>
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
+                  {stat.label}
+                </p>
               </div>
-              <div className="p-1.5 sm:p-2 rounded-xl bg-blue-500/20">
-                <Users className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
-              Total Applications
-            </p>
-          </div>
-
-          <div className="stats-card min-w-0">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xl sm:text-2xl font-black gradient-text-accent">
-                {totalStats.totalPending}
-              </div>
-              <div className="p-1.5 sm:p-2 rounded-xl bg-yellow-500/20">
-                <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400" />
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
-              Pending Review
-            </p>
-          </div>
-
-          <div className="stats-card min-w-0">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xl sm:text-2xl font-black text-green-600">
-                {totalStats.totalShortlisted}
-              </div>
-              <div className="p-1.5 sm:p-2 rounded-xl bg-green-500/20">
-                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate">
-              Shortlisted
-            </p>
-          </div>
+            );
+          })}
         </div>
 
         <div className="space-y-6 sm:space-y-8">
