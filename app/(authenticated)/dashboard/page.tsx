@@ -272,7 +272,7 @@ export default function ApplicantDashboard() {
             : "Congratulations! You've been accepted 🎉",
           description: selectedDepartment
             ? bothShortlisted
-              ? `Amazing! You have been accepted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}. You'll need to choose which department to join.`
+              ? `Amazing! You have been accepted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}.`
               : `You have been accepted for ${selectedDepartment}.`
             : "You have been accepted!",
           color: "text-green-600 dark:text-green-400",
@@ -285,7 +285,7 @@ export default function ApplicantDashboard() {
             : "Congratulations! You've been shortlisted 🎉",
           description: selectedDepartment
             ? bothShortlisted
-              ? `Amazing! You have been shortlisted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}. You'll need to choose which department to join.`
+              ? `Amazing! You have been shortlisted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}.`
               : `You have been shortlisted for ${selectedDepartment}.`
             : "You have been shortlisted!",
           color: "text-green-600 dark:text-green-400",
