@@ -1092,53 +1092,114 @@ export default function DepartmentPage() {
                     <div className="bg-muted/30 rounded-lg p-4">
                       <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                         <UserPlus className="h-4 w-4" />
-                        Add Recruiter to Panel
+                        Assign Recruiters to Panel
                       </h3>
-                      <div className="flex gap-3 items-end">
-                        <div className="flex-1">
-                          <label className="text-sm font-medium mb-2 block">Select Recruiter</label>
-                          <Select
-                            value={selectedRecruiterValue}
-                            onValueChange={async (value) => {
-                              if (selectedPanel && !isAddingRecruiter) {
-                                setIsAddingRecruiter(true);
-                                setSelectedRecruiterValue(value);
-                                try {
-                                  const res = await addRecruiterToPanel(
-                                    value,
-                                    deptId,
-                                    selectedPanel?.id
-                                  );
-                                  if (res) {
-                                    toast({ title: 'Success', description: 'Recruiter added to panel successfully' });
-                                    fetchPanelMembers(); 
-                                    setSelectedRecruiterValue(""); 
-                                  } else {
-                                    toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
-                                    setSelectedRecruiterValue(""); 
-                                  }
-                                } catch (error) {
-                                  toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
-                                  setSelectedRecruiterValue(""); 
-                                } finally {
-                                  setIsAddingRecruiter(false);
-                                }
-                              }
-                            }}
-                            disabled={isAddingRecruiter}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder={isAddingRecruiter ? "Adding recruiter..." : "Choose a recruiter to add..."} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {departmentRecruiters.map((recruiter) => (
-                                <SelectItem value={recruiter.id} key={recruiter.id}>
-                                  {recruiter.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <p className="text-sm text-muted-foreground">
+                        Manage recruiter assignments to this panel. Only unassigned recruiters from this department can be added.
+                      </p>
+                    </div>
+
+                    <div className="bg-card border rounded-lg overflow-hidden">
+                      <div className="p-4 border-b bg-muted/30">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Available Recruiters
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {departmentRecruiters.length} recruiter{departmentRecruiters.length !== 1 ? 's' : ''} available for assignment
+                        </p>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        {departmentRecruiters.length === 0 ? (
+                          <div className="p-8 text-center">
+                            <UserPlus className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                            <p className="text-muted-foreground font-medium">No available recruiters found</p>
+                            <p className="text-sm text-muted-foreground mt-1">All recruiters from this department are already assigned to panels</p>
+                          </div>
+                        ) : (
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/30">
+                                <TableHead className="font-semibold">Recruiter Name</TableHead>
+                                <TableHead className="font-semibold">Email</TableHead>
+                                <TableHead className="font-semibold">Assignment Status</TableHead>
+                                <TableHead className="font-semibold text-right">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {departmentRecruiters.map((recruiter) => {
+                                const isAssignedToThisPanel = panelMembers.some(member => member.id === recruiter.id);
+                                
+                                return (
+                                  <TableRow key={recruiter.id} className="hover:bg-muted/30">
+                                    <TableCell className="font-medium">{recruiter.name}</TableCell>
+                                    <TableCell className="text-muted-foreground">{recruiter.email}</TableCell>
+                                    <TableCell>
+                                      {isAssignedToThisPanel ? (
+                                        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                                          <CheckCircle className="h-3 w-3 mr-1" />
+                                          Assigned to this panel
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="bg-gray-50 text-gray-600">
+                                          <Clock className="h-3 w-3 mr-1" />
+                                          Available
+                                        </Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <div className="flex gap-2 justify-end">
+                                        <Button
+                                          size="sm"
+                                          variant={isAssignedToThisPanel ? 'default' : 'outline'}
+                                          disabled={isAssignedToThisPanel || isAddingRecruiter}
+                                          onClick={async () => {
+                                            if (selectedPanel && !isAddingRecruiter) {
+                                              setIsAddingRecruiter(true);
+                                              try {
+                                                const res = await addRecruiterToPanel(
+                                                  recruiter.id,
+                                                  deptId,
+                                                  selectedPanel?.id
+                                                );
+                                                if (res) {
+                                                  toast({ title: 'Success', description: 'Recruiter added to panel successfully' });
+                                                  fetchPanelMembers(); 
+                                                } else {
+                                                  toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
+                                                }
+                                              } catch (error) {
+                                                toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
+                                              } finally {
+                                                setIsAddingRecruiter(false);
+                                              }
+                                            }
+                                          }}
+                                          className={isAssignedToThisPanel ? 'bg-green-600 hover:bg-green-700' : ''}
+                                        >
+                                          {isAssignedToThisPanel ? (
+                                            <>
+                                              <CheckCircle className="h-4 w-4 mr-1" />
+                                              Assigned
+                                            </>
+                                          ) : isAddingRecruiter ? (
+                                            'Adding...'
+                                          ) : (
+                                            <>
+                                              <UserPlus className="h-4 w-4 mr-1" />
+                                              Assign
+                                            </>
+                                          )}
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        )}
                       </div>
                     </div>
 
