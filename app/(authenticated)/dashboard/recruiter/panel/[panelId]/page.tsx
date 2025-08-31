@@ -593,15 +593,16 @@ export default function PanelPage() {
 
           {/* Time Slot Management Dialog */}
           <Dialog open={isTimeSlotDialogOpen} onOpenChange={setIsTimeSlotDialogOpen}>
-            <DialogContent className="w-[95vw] max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl">Manage Interview Time Slots</DialogTitle>
                 <DialogDescription className="text-sm sm:text-base">
                   Create, edit, or delete interview time slots for this panel. Each slot can be booked by one applicant only.
                 </DialogDescription>
               </DialogHeader>
+              <div className="flex-1 overflow-y-auto space-y-4">
               {/* Create new slot */}
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   type="datetime-local"
                   value={slotForm.start}
@@ -636,11 +637,11 @@ export default function PanelPage() {
                   Add Slot
                 </Button>
               </div>
-              {slotError && <div className="text-red-500 text-xs sm:text-sm mb-2">{slotError}</div>}
+              {slotError && <div className="text-red-500 text-xs sm:text-sm">{slotError}</div>}
               {/* List slots */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[400px] overflow-y-auto border rounded-md">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 bg-background">
                     <TableRow>
                       <TableHead className="text-xs sm:text-sm">Start</TableHead>
                       <TableHead className="text-xs sm:text-sm">End</TableHead>
@@ -733,6 +734,7 @@ export default function PanelPage() {
                     )}
                   </TableBody>
                 </Table>
+              </div>
               </div>
             </DialogContent>
           </Dialog>
