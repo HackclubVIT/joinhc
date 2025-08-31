@@ -1867,10 +1867,10 @@ export async function getPanelTimeSlots(panelId: string): Promise<PanelTimeSlot[
   return data;
 }
 
-export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promise<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string })[]> {
+export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promise<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string; bookedByName?: string })[]> {
   const supabase = createClient();
   
-  
+  // Get all time slots for this panel
   const { data: slots, error: slotsError } = await supabase
     .from('panel_time_slots')
     .select('*')
@@ -1878,22 +1878,49 @@ export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promi
     .order('start_time');
   if (slotsError) throw slotsError;
   
-  
+  // Get bookings with applicant information
   const { data: bookings, error: bookingsError } = await supabase
     .from('applicant_time_slot')
     .select('time_slot_id, applicant_id')
     .eq('panel_id', panelId);
   if (bookingsError) throw bookingsError;
   
+  // Get applicant names for booked slots
+  const applicantIds = bookings.map((b: any) => b.applicant_id);
+  let applicantNames: { [key: string]: string } = {};
   
-  const bookedSlots = new Map(bookings.map((b: any) => [b.time_slot_id, b.applicant_id]));
+  if (applicantIds.length > 0) {
+    const { data: applications, error: applicationsError } = await supabase
+      .from('applications')
+      .select('applicant_id, name')
+      .in('applicant_id', applicantIds);
+    if (applicationsError) throw applicationsError;
+    
+    applicantNames = applications.reduce((acc: any, app: any) => {
+      acc[app.applicant_id] = app.name;
+      return acc;
+    }, {});
+  }
   
+  // Create a map of slot bookings with applicant names
+  const bookedSlots = new Map(bookings.map((b: any) => [
+    b.time_slot_id, 
+    { 
+      applicantId: b.applicant_id, 
+      applicantName: applicantNames[b.applicant_id] || 'Unknown'
+    }
+  ]));
   
-  return slots.map((slot: any) => ({
-    ...slot,
-    isBooked: bookedSlots.has(slot.id),
-    bookedBy: bookedSlots.get(slot.id) || undefined
-  }));
+  // Combine slots with booking status and applicant info
+  return slots.map((slot: any) => {
+    const booking = bookedSlots.get(slot.id);
+    return {
+      ...slot,
+      isBooked: bookedSlots.has(slot.id),
+      bookedBy: booking?.applicantId || undefined,
+      bookedByName: booking?.applicantName || undefined
+    };
+  });
 }
 
 export async function isTimeSlotAvailable(timeSlotId: string): Promise<boolean> {
