@@ -957,10 +957,11 @@ export default function ApplicantDashboard() {
                               </>
                             )}
                             <Dialog open={openSlotModal === 'first'} onOpenChange={(open) => setOpenSlotModal(open ? 'first' : null)}>
-                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
+                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
                                 <DialogHeader>
                                   <DialogTitle>First Preference Slot Booking</DialogTitle>
                                 </DialogHeader>
+                                <div className="flex-1 overflow-y-auto space-y-4">
                                 {slotLoading.first ? (
                                   <div>Loading slots...</div>
                                 ) : slotError.first ? (
@@ -986,9 +987,9 @@ export default function ApplicantDashboard() {
                                 ) : (
                                   <div>
                                     <div className="mb-2">Select a slot:</div>
-                                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                    <div className="overflow-x-auto max-h-[300px] overflow-y-auto border rounded-md -mx-4 sm:mx-0">
                                       <Table className="min-w-full">
-                                        <TableHeader>
+                                        <TableHeader className="sticky top-0 bg-background">
                                           <TableRow>
                                             <TableHead>Start</TableHead>
                                             <TableHead>End</TableHead>
@@ -1028,6 +1029,7 @@ export default function ApplicantDashboard() {
                                     </div>
                                   </div>
                                 )}
+                                </div>
                               </DialogContent>
                             </Dialog>
                           </div>
@@ -1209,10 +1211,11 @@ export default function ApplicantDashboard() {
                               </>
                             )}
                             <Dialog open={openSlotModal === 'second'} onOpenChange={(open) => setOpenSlotModal(open ? 'second' : null)}>
-                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
+                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
                                   <DialogHeader>
                                     <DialogTitle>Second Preference Slot Booking</DialogTitle>
                                   </DialogHeader>
+                                  <div className="flex-1 overflow-y-auto space-y-4">
                                   {slotLoading.second ? (
                                     <div>Loading slots...</div>
                                   ) : slotError.second ? (
@@ -1238,9 +1241,9 @@ export default function ApplicantDashboard() {
                                   ) : (
                                     <div>
                                       <div className="mb-2">Select a slot:</div>
-                                      <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                      <div className="overflow-x-auto max-h-[300px] overflow-y-auto border rounded-md -mx-4 sm:mx-0">
                                         <Table className="min-w-full">
-                                          <TableHeader>
+                                          <TableHeader className="sticky top-0 bg-background">
                                             <TableRow>
                                               <TableHead>Start</TableHead>
                                               <TableHead>End</TableHead>
@@ -1280,6 +1283,7 @@ export default function ApplicantDashboard() {
                                       </div>
                                     </div>
                                   )}
+                                  </div>
                                 </DialogContent>
                               </Dialog>
                             </div>
