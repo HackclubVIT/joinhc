@@ -81,7 +81,7 @@ export default function PanelPage() {
   const [meetLink, setMeetLink] = useState<string>("");
   const [meetLinkEditable, setMeetLinkEditable] = useState(false);
   const [isTimeSlotDialogOpen, setIsTimeSlotDialogOpen] = useState(false);
-  const [timeSlots, setTimeSlots] = useState<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string })[]>([]);
+  const [timeSlots, setTimeSlots] = useState<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string; bookedByName?: string })[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotForm, setSlotForm] = useState({ start: "", end: "" });
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
@@ -646,17 +646,18 @@ export default function PanelPage() {
                       <TableHead className="text-xs sm:text-sm">Start</TableHead>
                       <TableHead className="text-xs sm:text-sm">End</TableHead>
                       <TableHead className="text-xs sm:text-sm">Status</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Booked By</TableHead>
                       <TableHead className="text-xs sm:text-sm">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loadingSlots ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-xs sm:text-sm">Loading...</TableCell>
+                        <TableCell colSpan={5} className="text-xs sm:text-sm">Loading...</TableCell>
                       </TableRow>
                     ) : timeSlots.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-xs sm:text-sm">No time slots yet.</TableCell>
+                        <TableCell colSpan={5} className="text-xs sm:text-sm">No time slots yet.</TableCell>
                       </TableRow>
                     ) : (
                       timeSlots.map(slot => (
@@ -668,6 +669,13 @@ export default function PanelPage() {
                               <span className="text-red-600 font-medium">Booked</span>
                             ) : (
                               <span className="text-green-600 font-medium">Available</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs sm:text-sm">
+                            {slot.isBooked && slot.bookedByName ? (
+                              <span className="text-blue-600 font-medium">{slot.bookedByName}</span>
+                            ) : (
+                              <span className="text-gray-500">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-xs sm:text-sm">
