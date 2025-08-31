@@ -344,6 +344,42 @@ export async function getRecruiterDepartments(recruiterId: string) {
   }
 }
 
+export async function getAssignedPanelsForRecruiter(recruiterId: string) {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruiter_departments")
+      .select(
+        `
+        *,
+        department:departments(id, name, description),
+        panel:recruitment_panel(id, name, meet_link)
+      `
+      )
+      .eq("recruiter_id", recruiterId)
+      .not("panel_id", "is", null);
+
+    if (error) {
+      console.error("Error fetching assigned panels for recruiter:", error);
+      return [];
+    }
+
+    // Filter out entries where panel is null and format the data
+    const assignedPanels = data
+      .filter((item) => item.panel)
+      .map((item) => ({
+        ...item.panel,
+        department: item.department,
+      }));
+
+    return assignedPanels;
+  } catch (err) {
+    console.error("Error in getAssignedPanelsForRecruiter:", err);
+    return [];
+  }
+}
+
 export async function assignDepartmentToRecruiter(
   recruiterId: string,
   departmentId: string
