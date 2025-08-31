@@ -65,11 +65,38 @@ type Applicant = {
   priority_reason: string;
   portfolio_link?: string;
   created_at: string;
+  first_pref_status: "pending" | "shortlisted" | "not_selected" | "accepted" | "rejected";
+  second_pref_status: "pending" | "shortlisted" | "not_selected" | "accepted" | "rejected";
 };
 
 export default function PanelPage() {
   const { panelId }: { panelId: string } = useParams();
   const router = useRouter();
+
+  // Helper function to get status badge styling
+  const getStatusBadge = (status: string) => {
+    const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
+    switch (status) {
+      case "pending":
+        return `${baseClasses} bg-gray-100 text-gray-800`;
+      case "shortlisted":
+        return `${baseClasses} bg-blue-100 text-blue-800`;
+      case "accepted":
+        return `${baseClasses} bg-green-100 text-green-800`;
+      case "rejected":
+      case "not_selected":
+        return `${baseClasses} bg-red-100 text-red-800`;
+      default:
+        return `${baseClasses} bg-gray-100 text-gray-800`;
+    }
+  };
+
+  const formatStatus = (status: string) => {
+    if (status === "not_selected") {
+      return "Rejected";
+    }
+    return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
 
   const [panelData, setPanelData] = useState<PanelData>();
   const [searchQuery, setSearchQuery] = useState("");
@@ -508,9 +535,14 @@ export default function PanelPage() {
 
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-xs sm:text-sm font-medium">
-                        First Preference
-                      </Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-xs sm:text-sm font-medium">
+                          First Preference
+                        </Label>
+                        <span className={getStatusBadge(selectedApplicant.first_pref_status)}>
+                          {formatStatus(selectedApplicant.first_pref_status)}
+                        </span>
+                      </div>
                       <p className="text-xs sm:text-sm font-medium">
                         {selectedApplicant.first_pref_dept}
                       </p>
@@ -520,9 +552,14 @@ export default function PanelPage() {
                     </div>
 
                     <div>
-                      <Label className="text-xs sm:text-sm font-medium">
-                        Second Preference
-                      </Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-xs sm:text-sm font-medium">
+                          Second Preference
+                        </Label>
+                        <span className={getStatusBadge(selectedApplicant.second_pref_status)}>
+                          {formatStatus(selectedApplicant.second_pref_status)}
+                        </span>
+                      </div>
                       <p className="text-xs sm:text-sm font-medium">
                         {selectedApplicant.second_pref_dept}
                       </p>
