@@ -50,7 +50,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           const depts = await getRecruiterDepartments(user.id);
           setRecruiterDepartments(depts);
           
-          // Get only the panels assigned to this recruiter
+          
           const assignedPanels = await getAssignedPanelsForRecruiter(user.id);
           setRecruiterPanels(assignedPanels);
         } else {

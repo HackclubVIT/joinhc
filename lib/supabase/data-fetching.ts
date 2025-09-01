@@ -365,7 +365,7 @@ export async function getAssignedPanelsForRecruiter(recruiterId: string) {
       return [];
     }
 
-    // Filter out entries where panel is null and format the data
+    
     const assignedPanels = data
       .filter((item) => item.panel)
       .map((item) => ({
@@ -1870,7 +1870,7 @@ export async function getPanelTimeSlots(panelId: string): Promise<PanelTimeSlot[
 export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promise<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string; bookedByName?: string })[]> {
   const supabase = createClient();
   
-  // Get all time slots for this panel
+  
   const { data: slots, error: slotsError } = await supabase
     .from('panel_time_slots')
     .select('*')
@@ -1878,14 +1878,14 @@ export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promi
     .order('start_time');
   if (slotsError) throw slotsError;
   
-  // Get bookings with applicant information
+  
   const { data: bookings, error: bookingsError } = await supabase
     .from('applicant_time_slot')
     .select('time_slot_id, applicant_id')
     .eq('panel_id', panelId);
   if (bookingsError) throw bookingsError;
   
-  // Get applicant names for booked slots
+  
   const applicantIds = bookings.map((b: any) => b.applicant_id);
   let applicantNames: { [key: string]: string } = {};
   
@@ -1902,7 +1902,7 @@ export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promi
     }, {});
   }
   
-  // Create a map of slot bookings with applicant names
+  
   const bookedSlots = new Map(bookings.map((b: any) => [
     b.time_slot_id, 
     { 
@@ -1911,7 +1911,7 @@ export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promi
     }
   ]));
   
-  // Combine slots with booking status and applicant info
+  
   return slots.map((slot: any) => {
     const booking = bookedSlots.get(slot.id);
     return {
@@ -2009,9 +2009,54 @@ export async function bookApplicantTimeSlot(applicantId: string, panelId: string
   const supabase = createClient();
   
   
+  const { data: slotData, error: slotError } = await supabase
+    .from('panel_time_slots')
+    .select('start_time, end_time')
+    .eq('id', timeSlotId)
+    .single();
+  
+  if (slotError) throw new Error('Time slot not found');
+  
+  
+  const { data: timeCheck, error: timeError } = await supabase
+    .rpc('is_slot_expired', { slot_end_time: slotData.end_time });
+  
+  if (timeError) {
+    
+    throw new Error('Unable to verify slot timing - booking blocked for safety');
+  }
+  
+  if (timeCheck) {
+    throw new Error('Time slot has already passed');
+  }
+  
+  
+  const { data: deptData, error: deptError } = await supabase
+    .from('recruitment_panel')
+    .select('department_id')
+    .eq('id', panelId)
+    .single();
+  
+  if (deptError) throw new Error('Panel not found');
+  
+  
+  const { data: appData, error: appError } = await supabase
+    .from('applications')
+    .select('id')
+    .eq('applicant_id', applicantId)
+    .single();
+  
+  if (appError) throw new Error('Application not found');
+  
+  const isEvaluated = await isApplicantEvaluated(appData.id, deptData.department_id);
+  if (isEvaluated) {
+    throw new Error('Cannot book slot - interview already completed and evaluated');
+  }
+  
+  
   const isAvailable = await isTimeSlotAvailable(timeSlotId);
   if (!isAvailable) {
-    throw new Error('Time slot is already booked');
+    throw new Error('Time slot is already booked by another applicant');
   }
   
   
@@ -2025,15 +2070,28 @@ export async function bookApplicantTimeSlot(applicantId: string, panelId: string
   if (checkError && checkError.code !== 'PGRST116') throw checkError;
   
   if (existingBooking) {
-    throw new Error('Applicant already has a booking for this panel');
+    throw new Error('You already have a booking for this panel');
   }
+  
   
   const { data, error } = await supabase
     .from('applicant_time_slot')
-    .insert({ applicant_id: applicantId, panel_id: panelId, time_slot_id: timeSlotId, updated_at: new Date().toISOString() })
+    .insert({ 
+      applicant_id: applicantId, 
+      panel_id: panelId, 
+      time_slot_id: timeSlotId, 
+      updated_at: new Date().toISOString() 
+    })
     .select()
     .single();
-  if (error) throw error;
+  
+  if (error) {
+    if (error.code === '23505') { 
+      throw new Error('Time slot was just booked by another applicant');
+    }
+    throw error;
+  }
+  
   return data;
 }
 

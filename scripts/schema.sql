@@ -237,6 +237,35 @@ CREATE OR REPLACE FUNCTION "public"."update_user_role"("user_id" "uuid", "new_ro
 
 ALTER FUNCTION "public"."update_user_role"("user_id" "uuid", "new_role" "text") OWNER TO "postgres";
 
+-- Function to check if a time slot is expired
+CREATE OR REPLACE FUNCTION "public"."is_slot_expired"("slot_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE 
+        slot_start_time timestamptz;
+        current_time timestamptz;
+    BEGIN
+        -- Get the current time from the database (server time)
+        SELECT NOW() INTO current_time;
+        
+        -- Get the start time of the slot
+        SELECT start_time INTO slot_start_time
+        FROM panel_time_slots
+        WHERE id = slot_id;
+        
+        -- If slot not found, consider it expired
+        IF slot_start_time IS NULL THEN
+            RETURN TRUE;
+        END IF;
+        
+        -- Check if current time is past the start time
+        RETURN current_time >= slot_start_time;
+    END;
+$$;
+
+ALTER FUNCTION "public"."is_slot_expired"("slot_id" "uuid") OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -741,6 +770,12 @@ GRANT ALL ON FUNCTION "public"."update_user_role"("user_email" "text", "new_role
 GRANT ALL ON FUNCTION "public"."update_user_role"("user_id" "uuid", "new_role" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."update_user_role"("user_id" "uuid", "new_role" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_user_role"("user_id" "uuid", "new_role" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."is_slot_expired"("slot_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."is_slot_expired"("slot_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_slot_expired"("slot_id" "uuid") TO "service_role";
 
 
 

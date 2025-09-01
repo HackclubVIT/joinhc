@@ -48,6 +48,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { HackClubLogo } from "@/components/hackclub-logo";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 
@@ -889,8 +890,8 @@ export default function ApplicantDashboard() {
                               </div>
                             </div>
                             
-                            {/* Always show the ready message for shortlisted applicants */}
-                            {!evaluationStatus.first && (
+                            {/* Show ready message only if not evaluated AND slot hasn't passed */}
+                            {!evaluationStatus.first && !hasSlotPassed(slotData.first.booking) && (
                               <div className="text-sm text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
                                 <div className="flex items-center gap-2">
                                   <Clock className="h-4 w-4" />
@@ -903,16 +904,31 @@ export default function ApplicantDashboard() {
                                 </div>
                               </div>
                             )}
+
+                            {/* Show slot passed message if slot has passed but not yet evaluated */}
+                            {!evaluationStatus.first && hasSlotPassed(slotData.first.booking) && (
+                              <div className="text-sm text-orange-400 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-4">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-4 w-4" />
+                                  <span>Interview slot has passed</span>
+                                </div>
+                                <div className="text-xs text-orange-300 mt-1">
+                                  <p>Your interview slot has ended. Please wait for the evaluation results.</p>
+                                </div>
+                              </div>
+                            )}
                             
                             {evaluationStatus.first ? (
                               <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 mb-2">
                                   <CheckCircle className="h-4 w-4" />
-                                  <span>Evaluation completed</span>
+                                  <span className="font-semibold">Evaluation completed</span>
                                 </div>
-                                <p className="text-xs text-green-300 mt-1">
-                                  Your interview has been completed and evaluated
-                                </p>
+                                <div className="text-xs text-green-300 space-y-1">
+                                  <p>✅ Your interview has been completed and evaluated</p>
+                                  <p>⏳ Please wait for the final results - we will announce them soon</p>
+                                  <p>📢 You'll be notified via email and WhatsApp when results are published</p>
+                                </div>
                               </div>
                             ) : panelAssignments.first && (
                               <>
@@ -934,8 +950,8 @@ export default function ApplicantDashboard() {
                                     </a>
                                   </div>
                                 )}
-                                {/* Meet link access info */}
-                                {slotData.first.booking && (
+                                {/* Meet link access info - only show if slot hasn't passed */}
+                                {slotData.first.booking && !hasSlotPassed(slotData.first.booking) && (
                                   <div className="text-xs text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 mb-2">
                                     <div className="flex items-center gap-2">
                                       <Clock className="h-3 w-3" />
@@ -975,8 +991,13 @@ export default function ApplicantDashboard() {
                               <Button
                                 variant="outline"
                                         onClick={async () => {
-                                          await cancelApplicantTimeSlot(application.applicant_id, slotData.first.booking.panel_id);
-                                          fetchSlotData('first');
+                                          try {
+                                            await cancelApplicantTimeSlot(application.applicant_id, slotData.first.booking.panel_id);
+                                            toast.success('Slot cancelled successfully!');
+                                            fetchSlotData('first');
+                                          } catch (error: any) {
+                                            toast.error(error.message || 'Failed to cancel slot');
+                                          }
                                         }}
                                           className="w-full sm:w-auto text-sm"
                               >
@@ -1010,11 +1031,20 @@ export default function ApplicantDashboard() {
                                                   <Button
                                                     size="sm"
                                                     onClick={async () => {
+                                                      
+                                                      const now = toIST(new Date());
+                                                      const slotStart = toIST(slot.start_time);
+                                                      if (now >= slotStart) {
+                                                        toast.error('Cannot book this slot - the interview time has already passed.');
+                                                        return;
+                                                      }
+
                                                       try {
                                                         await bookApplicantTimeSlot(application.applicant_id, slotData.first.panel.id, slot.id);
+                                                        toast.success('Slot booked successfully!');
                                                         fetchSlotData('first');
                                                       } catch (error: any) {
-                                                        alert(error.message || 'Failed to book slot');
+                                                        toast.error(error.message || 'Failed to book slot');
                                                       }
                                                     }}
                                                   >
@@ -1143,8 +1173,8 @@ export default function ApplicantDashboard() {
                                 </div>
                               </div>
                               
-                              {/* Always show the ready message for shortlisted applicants */}
-                              {!evaluationStatus.second && (
+                              {/* Show ready message only if not evaluated AND slot hasn't passed */}
+                              {!evaluationStatus.second && !hasSlotPassed(slotData.second.booking) && (
                                 <div className="text-sm text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
                                   <div className="flex items-center gap-2">
                                     <Clock className="h-4 w-4" />
@@ -1157,16 +1187,31 @@ export default function ApplicantDashboard() {
                                   </div>
                                 </div>
                               )}
+
+                              {/* Show slot passed message if slot has passed but not yet evaluated */}
+                              {!evaluationStatus.second && hasSlotPassed(slotData.second.booking) && (
+                                <div className="text-sm text-orange-400 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-4">
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="h-4 w-4" />
+                                    <span>Interview slot has passed</span>
+                                  </div>
+                                  <div className="text-xs text-orange-300 mt-1">
+                                    <p>Your interview slot has ended. Please wait for the evaluation results.</p>
+                                  </div>
+                                </div>
+                              )}
                               
                               {evaluationStatus.second ? (
                                 <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 mb-2">
                                     <CheckCircle className="h-4 w-4" />
-                                    <span>Evaluation completed</span>
+                                    <span className="font-semibold">Evaluation completed</span>
                                   </div>
-                                  <p className="text-xs text-green-300 mt-1">
-                                    Your interview has been completed and evaluated
-                                  </p>
+                                  <div className="text-xs text-green-300 space-y-1">
+                                    <p>✅ Your interview has been completed and evaluated</p>
+                                    <p>⏳ Please wait for the final results - we will announce them soon</p>
+                                    <p>📢 You'll be notified via email and WhatsApp when results are published</p>
+                                  </div>
                                 </div>
                               ) : panelAssignments.second && (
                                 <>
@@ -1188,8 +1233,8 @@ export default function ApplicantDashboard() {
                                     </a>
                                   </div>
                                 )}
-                                {/* Meet link access info */}
-                                {slotData.second.booking && (
+                                {/* Meet link access info - only show if slot hasn't passed */}
+                                {slotData.second.booking && !hasSlotPassed(slotData.second.booking) && (
                                   <div className="text-xs text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 mb-2">
                                     <div className="flex items-center gap-2">
                                       <Clock className="h-3 w-3" />
@@ -1229,8 +1274,13 @@ export default function ApplicantDashboard() {
                                 <Button
                                   variant="outline"
                                           onClick={async () => {
-                                            await cancelApplicantTimeSlot(application.applicant_id, slotData.second.booking.panel_id);
-                                            fetchSlotData('second');
+                                            try {
+                                              await cancelApplicantTimeSlot(application.applicant_id, slotData.second.booking.panel_id);
+                                              toast.success('Slot cancelled successfully!');
+                                              fetchSlotData('second');
+                                            } catch (error: any) {
+                                              toast.error(error.message || 'Failed to cancel slot');
+                                            }
                                           }}
                                           className="w-full sm:w-auto text-sm"
                                 >
@@ -1264,11 +1314,20 @@ export default function ApplicantDashboard() {
                                                     <Button
                                                       size="sm"
                                                       onClick={async () => {
+                                                        
+                                                        const now = toIST(new Date());
+                                                        const slotStart = toIST(slot.start_time);
+                                                        if (now >= slotStart) {
+                                                          toast.error('Cannot book this slot - the interview time has already passed.');
+                                                          return;
+                                                        }
+
                                                         try {
                                                           await bookApplicantTimeSlot(application.applicant_id, slotData.second.panel.id, slot.id);
+                                                          toast.success('Slot booked successfully!');
                                                           fetchSlotData('second');
                                                         } catch (error: any) {
-                                                          alert(error.message || 'Failed to book slot');
+                                                          toast.error(error.message || 'Failed to book slot');
                                                         }
                                                       }}
                                                     >

@@ -72,8 +72,6 @@ type Applicant = {
 export default function PanelPage() {
   const { panelId }: { panelId: string } = useParams();
   const router = useRouter();
-
-  // Helper function to get status badge styling
   const getStatusBadge = (status: string) => {
     const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
     switch (status) {
