@@ -737,8 +737,11 @@ export default function PanelPage() {
                                       await updatePanelTimeSlot(slot.id, editForm.start, editForm.end);
                                       setEditingSlotId(null);
                                       fetchTimeSlots();
-                                    } catch (e) {
-                                      setSlotError("Failed to update slot");
+                                      toast.success('Time slot updated successfully!');
+                                    } catch (e: any) {
+                                      const errorMessage = e.message || "Failed to update slot";
+                                      setSlotError(errorMessage);
+                                      toast.error(errorMessage);
                                     }
                                   }}
                                 >
@@ -752,22 +755,59 @@ export default function PanelPage() {
                             ) : (
                               <>
                                 <div className="flex flex-col sm:flex-row gap-1">
-                                  <Button size="sm" variant="outline" className="text-xs sm:text-sm" onClick={() => {
-                                  setEditingSlotId(slot.id);
-                                  setEditForm({ start: slot.start_time.slice(0, 16), end: slot.end_time.slice(0, 16) });
-                                }}>
-                                  Edit
-                                </Button>
-                                  <Button size="sm" variant="destructive" className="text-xs sm:text-sm" onClick={async () => {
-                                  try {
-                                    await deletePanelTimeSlot(slot.id);
-                                    fetchTimeSlots();
-                                  } catch (e) {
-                                    setSlotError("Failed to delete slot");
-                                  }
-                                }}>
-                                  Delete
-                                </Button>
+                                  {(() => {
+                                    const now = new Date();
+                                    const slotStartTime = new Date(slot.start_time);
+                                    const isExpired = now >= slotStartTime;
+                                    const canEdit = !(slot.isBooked && isExpired);
+                                    
+                                    return (
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className={`text-xs sm:text-sm ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        disabled={!canEdit}
+                                        title={!canEdit ? "Cannot edit booked slot that has already passed" : ""}
+                                        onClick={() => {
+                                          if (!canEdit) return;
+                                          setEditingSlotId(slot.id);
+                                          setEditForm({ start: slot.start_time.slice(0, 16), end: slot.end_time.slice(0, 16) });
+                                        }}
+                                      >
+                                        Edit
+                                      </Button>
+                                    );
+                                  })()}
+                                  {(() => {
+                                    const now = new Date();
+                                    const slotStartTime = new Date(slot.start_time);
+                                    const isExpired = now >= slotStartTime;
+                                    const canDelete = !(slot.isBooked && isExpired);
+                                    
+                                    return (
+                                      <Button 
+                                        size="sm" 
+                                        variant="destructive" 
+                                        className={`text-xs sm:text-sm ${!canDelete ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        disabled={!canDelete}
+                                        title={!canDelete ? "Cannot delete booked slot that has already passed" : ""}
+                                        onClick={async () => {
+                                          if (!canDelete) return;
+                                          try {
+                                            await deletePanelTimeSlot(slot.id);
+                                            fetchTimeSlots();
+                                            toast.success('Time slot deleted successfully!');
+                                          } catch (e: any) {
+                                            const errorMessage = e.message || "Failed to delete slot";
+                                            setSlotError(errorMessage);
+                                            toast.error(errorMessage);
+                                          }
+                                        }}
+                                      >
+                                        Delete
+                                      </Button>
+                                    );
+                                  })()}
                                 </div>
                               </>
                             )}

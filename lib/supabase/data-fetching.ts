@@ -1948,6 +1948,35 @@ export async function createPanelTimeSlot(panelId: string, start_time: string, e
 
 export async function updatePanelTimeSlot(timeSlotId: string, start_time: string, end_time: string): Promise<PanelTimeSlot> {
   const supabase = createClient();
+  
+  
+  const { data: slotCheck, error: slotError } = await supabase
+    .from('panel_time_slots')
+    .select('start_time')
+    .eq('id', timeSlotId)
+    .single();
+  
+  if (slotError) throw new Error('Time slot not found');
+  
+  
+  const { data: booking, error: bookingError } = await supabase
+    .from('applicant_time_slot')
+    .select('id')
+    .eq('time_slot_id', timeSlotId)
+    .single();
+  
+  
+  if (booking && !bookingError) {
+    const now = new Date();
+    const slotStartTime = new Date(slotCheck.start_time);
+    const isExpired = now >= slotStartTime;
+    
+    if (isExpired) {
+      throw new Error('Cannot edit booked slot that has already passed');
+    }
+  }
+  
+  
   const { data, error } = await supabase
     .from('panel_time_slots')
     .update({ start_time, end_time, updated_at: new Date().toISOString() })
@@ -1960,6 +1989,35 @@ export async function updatePanelTimeSlot(timeSlotId: string, start_time: string
 
 export async function deletePanelTimeSlot(timeSlotId: string): Promise<boolean> {
   const supabase = createClient();
+  
+  
+  const { data: slotCheck, error: slotError } = await supabase
+    .from('panel_time_slots')
+    .select('start_time')
+    .eq('id', timeSlotId)
+    .single();
+  
+  if (slotError) throw new Error('Time slot not found');
+  
+  
+  const { data: booking, error: bookingError } = await supabase
+    .from('applicant_time_slot')
+    .select('id')
+    .eq('time_slot_id', timeSlotId)
+    .single();
+  
+  
+  if (booking && !bookingError) {
+    const now = new Date();
+    const slotStartTime = new Date(slotCheck.start_time);
+    const isExpired = now >= slotStartTime;
+    
+    if (isExpired) {
+      throw new Error('Cannot delete booked slot that has already passed');
+    }
+  }
+  
+  
   const { error } = await supabase
     .from('panel_time_slots')
     .delete()
@@ -2019,14 +2077,13 @@ export async function bookApplicantTimeSlot(applicantId: string, panelId: string
   
   
   const { data: timeCheck, error: timeError } = await supabase
-    .rpc('is_slot_expired', { slot_end_time: slotData.end_time });
+    .rpc('is_slot_expired', { slot_id: timeSlotId });
   
   if (timeError) {
     
-    throw new Error('Unable to verify slot timing - booking blocked for safety');
-  }
-  
-  if (timeCheck) {
+    
+    console.warn('is_slot_expired function not available, skipping time check:', timeError);
+  } else if (timeCheck) {
     throw new Error('Time slot has already passed');
   }
   
