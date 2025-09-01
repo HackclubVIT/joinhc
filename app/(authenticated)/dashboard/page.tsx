@@ -1023,19 +1023,28 @@ export default function ApplicantDashboard() {
                                               <TableCell colSpan={3}>No available slots.</TableCell>
                                             </TableRow>
                                           ) : (
-                                            slotData.first.slots.map((slot: any) => (
-                                              <TableRow key={slot.id}>
-                                                <TableCell>{formatIST(slot.start_time)}</TableCell>
-                                                <TableCell>{formatIST(slot.end_time)}</TableCell>
+                                            slotData.first.slots.map((slot: any) => {
+                                              const now = new Date();
+                                              const slotStartTime = new Date(slot.start_time);
+                                              const isExpired = now >= slotStartTime;
+                                              
+                                              return (
+                                              <TableRow key={slot.id} className={isExpired ? 'opacity-60 bg-gray-50/50 pointer-events-none' : 'hover:bg-muted/50'}>
+                                                <TableCell className={isExpired ? 'text-gray-500 cursor-not-allowed' : ''}>{formatIST(slot.start_time)}</TableCell>
+                                                <TableCell className={isExpired ? 'text-gray-500 cursor-not-allowed' : ''}>{formatIST(slot.end_time)}</TableCell>
                                                 <TableCell>
                                                   <Button
                                                     size="sm"
+                                                    disabled={isExpired}
+                                                    variant={isExpired ? 'secondary' : 'default'}
+                                                    className={isExpired ? 'cursor-not-allowed bg-gray-200 text-gray-500 hover:bg-gray-200 hover:text-gray-500' : ''}
                                                     onClick={async () => {
                                                       
-                                                      const now = toIST(new Date());
-                                                      const slotStart = toIST(slot.start_time);
-                                                      if (now >= slotStart) {
-                                                        toast.error('Cannot book this slot - the interview time has already passed.');
+                                                      if (isExpired) {
+                                                        toast.error(`Cannot book this slot - Interview time has already passed. Slot was scheduled for ${formatIST(slot.start_time)} IST.`, {
+                                                          duration: 5000,
+                                                          description: 'Please select a future time slot.',
+                                                        });
                                                         return;
                                                       }
 
@@ -1048,11 +1057,12 @@ export default function ApplicantDashboard() {
                                                       }
                                                     }}
                                                   >
-                                                    Book
+                                                    {isExpired ? 'Expired' : 'Book'}
                                                   </Button>
                                                 </TableCell>
                                               </TableRow>
-                                            ))
+                                              );
+                                            })
                                           )}
                                         </TableBody>
                                       </Table>
@@ -1306,19 +1316,28 @@ export default function ApplicantDashboard() {
                                                 <TableCell colSpan={3}>No available slots.</TableCell>
                                               </TableRow>
                                             ) : (
-                                              slotData.second.slots.map((slot: any) => (
-                                                <TableRow key={slot.id}>
-                                                  <TableCell>{formatIST(slot.start_time)}</TableCell>
-                                                  <TableCell>{formatIST(slot.end_time)}</TableCell>
+                                              slotData.second.slots.map((slot: any) => {
+                                                const now = new Date();
+                                                const slotStartTime = new Date(slot.start_time);
+                                                const isExpired = now >= slotStartTime;
+                                                
+                                                return (
+                                                <TableRow key={slot.id} className={isExpired ? 'opacity-60 bg-gray-50/50 pointer-events-none' : 'hover:bg-muted/50'}>
+                                                  <TableCell className={isExpired ? 'text-gray-500 cursor-not-allowed' : ''}>{formatIST(slot.start_time)}</TableCell>
+                                                  <TableCell className={isExpired ? 'text-gray-500 cursor-not-allowed' : ''}>{formatIST(slot.end_time)}</TableCell>
                                                   <TableCell>
                                                     <Button
                                                       size="sm"
+                                                      disabled={isExpired}
+                                                      variant={isExpired ? 'secondary' : 'default'}
+                                                      className={isExpired ? 'cursor-not-allowed bg-gray-200 text-gray-500 hover:bg-gray-200 hover:text-gray-500' : ''}
                                                       onClick={async () => {
                                                         
-                                                        const now = toIST(new Date());
-                                                        const slotStart = toIST(slot.start_time);
-                                                        if (now >= slotStart) {
-                                                          toast.error('Cannot book this slot - the interview time has already passed.');
+                                                        if (isExpired) {
+                                                          toast.error(`Cannot book this slot - Interview time has already passed. Slot was scheduled for ${formatIST(slot.start_time)} IST.`, {
+                                                            duration: 5000,
+                                                            description: 'Please select a future time slot.',
+                                                          });
                                                           return;
                                                         }
 
@@ -1331,11 +1350,12 @@ export default function ApplicantDashboard() {
                                                         }
                                                       }}
                                                     >
-                                                      Book
+                                                      {isExpired ? 'Expired' : 'Book'}
                                                     </Button>
                                                   </TableCell>
                                                 </TableRow>
-                                              ))
+                                                );
+                                              })
                                             )}
                                           </TableBody>
                                         </Table>
