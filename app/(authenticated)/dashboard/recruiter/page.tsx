@@ -74,14 +74,14 @@ export default function RecruiterDashboard() {
 
   useEffect(() => {
     const fetchDeadlines = async () => {
-      console.log('🕒 Fetching deadlines...');
+      
       try {
         const { applicationDeadline, shortlistDeadline } = await getAllDeadlines();
         
         setApplicationDeadline(applicationDeadline?.deadline ? new Date(applicationDeadline.deadline) : null);
         setShortlistDeadline(shortlistDeadline?.deadline ? new Date(shortlistDeadline.deadline) : null);
         
-        console.log('✅ Deadlines fetched successfully');
+        
       } catch (err) {
         console.error('❌ Error fetching deadlines:', err);
         setApplicationDeadline(null);
@@ -99,7 +99,7 @@ export default function RecruiterDashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      console.log('📊 Fetching dashboard data...');
+      
       try {
         if (!user || !deadlinesLoaded) {
           setIsLoading(false);
@@ -142,7 +142,7 @@ export default function RecruiterDashboard() {
         setDepartments(departmentStats);
         setPanels(userPanels);
         setTotalStats(overallStats);
-        console.log('✅ Dashboard data fetched successfully');
+        
       } catch (err) {
         console.error("❌ Error fetching recruiter dashboard data:", err);
       } finally {

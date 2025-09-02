@@ -22,6 +22,7 @@ import {
   createPanelTimeSlot,
   updatePanelTimeSlot,
   deletePanelTimeSlot,
+  getDepartmentNameById,
   type PanelTimeSlot,
 } from "@/lib/supabase/data-fetching";
 import {
@@ -58,9 +59,9 @@ type Applicant = {
   name: string;
   email: string;
   register_no: string;
-  first_pref_dept: string;
+  first_pref_dept_id: string;
   first_pref_reason: string;
-  second_pref_dept: string;
+  second_pref_dept_id: string;
   second_pref_reason: string;
   priority_reason: string;
   portfolio_link?: string;
@@ -112,6 +113,10 @@ export default function PanelPage() {
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ start: "", end: "" });
   const [slotError, setSlotError] = useState<string | null>(null);
+  
+  
+  const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("");
+  const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("");
 
   
   const fetchTimeSlots = async () => {
@@ -128,6 +133,11 @@ export default function PanelPage() {
 
   useEffect(() => {
     if (isMarkDialogOpen && selectedApplicant?.id && panelData?.department_id) {
+      
+      setScore(null);
+      setRemark("");
+      
+      
       getApplicantMarkByRecruiter(
         selectedApplicant?.id,
         panelData?.department_id
@@ -137,8 +147,37 @@ export default function PanelPage() {
           setRemark(res.remarks);
         }
       });
+    } else if (!isMarkDialogOpen) {
+      
+      setScore(null);
+      setRemark("");
     }
-  }, [isMarkDialogOpen]);
+  }, [isMarkDialogOpen, selectedApplicant?.id, panelData?.department_id]);
+
+  
+  useEffect(() => {
+    const fetchDeptNames = async () => {
+      if (selectedApplicant) {
+        try {
+          const [first, second] = await Promise.all([
+            getDepartmentNameById(selectedApplicant.first_pref_dept_id),
+            getDepartmentNameById(selectedApplicant.second_pref_dept_id),
+          ]);
+          setFirstPrefDeptName(first || selectedApplicant.first_pref_dept_id);
+          setSecondPrefDeptName(second || selectedApplicant.second_pref_dept_id);
+        } catch (error) {
+          console.error("Error fetching department names:", error);
+          
+          setFirstPrefDeptName(selectedApplicant.first_pref_dept_id);
+          setSecondPrefDeptName(selectedApplicant.second_pref_dept_id);
+        }
+      } else {
+        setFirstPrefDeptName("");
+        setSecondPrefDeptName("");
+      }
+    };
+    fetchDeptNames();
+  }, [selectedApplicant]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -173,9 +212,16 @@ export default function PanelPage() {
     );
   }
 
-  const filteredApplicants = panelData.applicants.filter((data) =>
-    data.name.startsWith(searchQuery)
-  );
+  const filteredApplicants = panelData.applicants.filter((applicant) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return (
+      applicant.name?.toLowerCase().includes(query) ||
+      applicant.email?.toLowerCase().includes(query) ||
+      applicant.register_no?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="min-h-screen hackclub-bg page-transition overflow-x-hidden">
@@ -427,7 +473,15 @@ export default function PanelPage() {
             </CardContent>
           </Card>
 
-          <Dialog open={isMarkDialogOpen} onOpenChange={setIsMarkDialogOpen}>
+          <Dialog open={isMarkDialogOpen} onOpenChange={(open) => {
+            setIsMarkDialogOpen(open);
+            if (!open) {
+              
+              setScore(null);
+              setRemark("");
+              setSelectedApplicant(undefined);
+            }
+          }}>
             <DialogContent className="w-[95vw] max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl">Mark & Remark</DialogTitle>
@@ -491,6 +545,9 @@ export default function PanelPage() {
                     }
                     setIsMarkDialogOpen(false);
                     setSelectedApplicant(undefined);
+                    
+                    setScore(null);
+                    setRemark("");
                   }}
                   className="mt-2 w-full"
                 >
@@ -501,7 +558,15 @@ export default function PanelPage() {
           </Dialog>
 
           {/* Applicant Details Dialog */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              
+              setFirstPrefDeptName("");
+              setSecondPrefDeptName("");
+              setSelectedApplicant(undefined);
+            }
+          }}>
             <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-y-auto border-0">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl font-semibold">
@@ -542,7 +607,7 @@ export default function PanelPage() {
                         </span>
                       </div>
                       <p className="text-xs sm:text-sm font-medium">
-                        {selectedApplicant.first_pref_dept}
+                        {firstPrefDeptName || selectedApplicant.first_pref_dept_id}
                       </p>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         {selectedApplicant.first_pref_reason}
@@ -559,7 +624,7 @@ export default function PanelPage() {
                         </span>
                       </div>
                       <p className="text-xs sm:text-sm font-medium">
-                        {selectedApplicant.second_pref_dept}
+                        {secondPrefDeptName || selectedApplicant.second_pref_dept_id}
                       </p>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         {selectedApplicant.second_pref_reason}
