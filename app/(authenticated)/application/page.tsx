@@ -74,58 +74,12 @@ export default function ApplicationPage() {
     first: { slots: [], booking: null, panel: null, meetLink: null },
     second: { slots: [], booking: null, panel: null, meetLink: null },
   });
-  const [slotLoading, setSlotLoading] = useState<Record<Pref, boolean>>({ first: false, second: false });
-  const [slotError, setSlotError] = useState<Record<Pref, string | null>>({ first: null, second: null });
-  const [showMeetDialog, setShowMeetDialog] = useState(false);
-  const [meetDialogMsg, setMeetDialogMsg] = useState("");
 
   
   const toIST = (date: string | Date) => {
     return new Date(
       new Date(date).toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
     );
-  };
-
-  
-  const fetchSlotData = async (pref: Pref) => {
-    setSlotLoading((l) => ({ ...l, [pref]: true }));
-    setSlotError((e) => ({ ...e, [pref]: null }));
-    try {
-      const app = await getApplicationForUser();
-      const panelId =
-        pref === "first"
-          ? app.first_pref_panel_id
-          : app.second_pref_panel_id;
-      const status =
-        pref === "first"
-          ? app.first_pref_status
-          : app.second_pref_status;
-      if (!panelId || status !== "shortlisted") {
-        setSlotData((d) => ({ ...d, [pref]: { slots: [], booking: null, panel: null, meetLink: null } }));
-        setSlotLoading((l) => ({ ...l, [pref]: false }));
-        return;
-      }
-      
-      const slots = await getAvailableTimeSlotsForPanel(panelId);
-      
-      const booking = await getApplicantTimeSlot(app.applicant_id, panelId);
-      
-      const panelArr = await getPanelByDepartment(app[`${pref}_pref_dept_id`]);
-      const panel = panelArr.find((p) => p.id === panelId);
-      setSlotData((d) => ({
-        ...d,
-        [pref]: {
-          slots,
-          booking,
-          panel,
-          meetLink: panel?.meet_link || null,
-        },
-      }));
-    } catch (e) {
-      setSlotError((err) => ({ ...err, [pref]: "Failed to load slots" }));
-    } finally {
-      setSlotLoading((l) => ({ ...l, [pref]: false }));
-    }
   };
 
   useEffect(() => {
@@ -177,8 +131,6 @@ export default function ApplicationPage() {
 
     if (user) {
       fetchData();
-      fetchSlotData('first');
-      fetchSlotData('second');
     }
   }, [user]);
 
@@ -511,120 +463,6 @@ export default function ApplicationPage() {
             </CardFooter>
           </Card>
         </form>
-      </div>
-
-      <div className="px-4 mt-8">
-        {(['first', 'second'] as Pref[]).map((pref) => {
-          const prefLabel = pref === 'first' ? 'First' : 'Second';
-          const d = slotData[pref];
-          if (!d.panel) return null;
-          return (
-            <Card className="mb-6" key={pref}>
-              <CardHeader>
-                <CardTitle>
-                  {prefLabel} Preference Interview Slot
-                </CardTitle>
-                <CardDescription>
-                  Book your interview slot for the {d.panel.name} panel.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {slotLoading[pref] ? (
-                  <div>Loading slots...</div>
-                ) : slotError[pref] ? (
-                  <div className="text-red-500">{slotError[pref]}</div>
-                ) : d.booking ? (
-                  <div className="space-y-2">
-                    <div>
-                      <b>Your booked slot:</b> {formatIST(d.booking.start_time)} to {formatIST(d.booking.end_time)} IST
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <Button
-                        variant="outline"
-                        onClick={async () => {
-                          await cancelApplicantTimeSlot(d.booking.applicant_id, d.booking.panel_id);
-                          fetchSlotData(pref);
-                        }}
-                      >
-                        Cancel Booking
-                      </Button>
-                    </div>
-                    {d.meetLink && (
-                      <div className="mt-4">
-                        {canShowMeetLink(d.booking) ? (
-                          <a href={d.meetLink} target="_blank" rel="noopener noreferrer">
-                            <Button>Join Meet</Button>
-                          </a>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setMeetDialogMsg(
-                                `Your interview time is from ${formatIST(d.booking.start_time)} to ${formatIST(d.booking.end_time)} IST. The meet link will be available 10 minutes before your slot.`
-                              );
-                              setShowMeetDialog(true);
-                            }}
-                          >
-                            Join Meet
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <div className="mb-2">Select a slot:</div>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Start</TableHead>
-                            <TableHead>End</TableHead>
-                            <TableHead>Action</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {d.slots.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={3}>No available slots.</TableCell>
-                            </TableRow>
-                          ) : (
-                            d.slots.map((slot: any) => (
-                              <TableRow key={slot.id}>
-                                <TableCell>{formatIST(slot.start_time)}</TableCell>
-                                <TableCell>{formatIST(slot.end_time)}</TableCell>
-                                <TableCell>
-                                  <Button
-                                    size="sm"
-                                    onClick={async () => {
-                                      if (!user) return;
-                                      await bookApplicantTimeSlot(user.id, d.panel.id, slot.id);
-                                      fetchSlotData(pref);
-                                    }}
-                                  >
-                                    Book
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-        <Dialog open={showMeetDialog} onOpenChange={setShowMeetDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Meet Link Unavailable</DialogTitle>
-            </DialogHeader>
-            <div>{meetDialogMsg}</div>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );
