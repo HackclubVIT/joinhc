@@ -81,6 +81,7 @@ import {
   getApplicationDeadline,
   getShortlistDeadline,
   isCurrentUserRecruiterForDepartment,
+  areResultsPublished,
 } from "@/lib/supabase/data-fetching";
 import { HackClubLogo } from "@/components/hackclub-logo";
 import {
@@ -137,6 +138,7 @@ export default function DepartmentPage() {
   const [isAddingRecruiter, setIsAddingRecruiter] = useState(false);
   const [removingRecruiterId, setRemovingRecruiterId] = useState<string | null>(null);
   const [selectedRecruiterValue, setSelectedRecruiterValue] = useState<string>("");
+  const [resultsPublished, setResultsPublished] = useState(false);
 
   const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("");
   const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("");
@@ -287,15 +289,18 @@ export default function DepartmentPage() {
   useEffect(() => {
     async function fetchDeadlines() {
       try {
-        const [appDL, shortDL] = await Promise.all([
+        const [appDL, shortDL, resultsPublishedStatus] = await Promise.all([
           getApplicationDeadline(),
           getShortlistDeadline(),
+          areResultsPublished(),
         ]);
         setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
         setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
+        setResultsPublished(resultsPublishedStatus);
       } catch (err) {
         setApplicationDeadline(null);
         setShortlistDeadline(null);
+        setResultsPublished(false);
       } finally {
         setDeadlinesLoaded(true); 
       }
@@ -359,9 +364,30 @@ export default function DepartmentPage() {
           return app;
         })
       );
+      
+      toast({
+        title: "Success",
+        description: `Application status updated to ${newStatus}`,
+      });
+      
       return data;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error updating status:", err);
+      
+      // Handle specific error for results published
+      if (err.message?.includes('after results have been published')) {
+        toast({
+          title: "Cannot Update Status",
+          description: "Results have been published. Application status can no longer be changed.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: err.message || "Failed to update application status",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -970,9 +996,11 @@ export default function DepartmentPage() {
                                           }
                                           disabled={
                                             currentStatus === "accepted" as any ||
-                                            isUpdating
+                                            isUpdating ||
+                                            resultsPublished
                                           }
                                           className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20 text-xs sm:text-sm"
+                                          title={resultsPublished ? "Cannot update status after results are published" : ""}
                                         >
                                           Accept
                                         </Button>
@@ -988,9 +1016,12 @@ export default function DepartmentPage() {
                                             )
                                           }
                                           disabled={
-                                            currentStatus === "rejected" as any || isUpdating
+                                            currentStatus === "rejected" as any || 
+                                            isUpdating ||
+                                            resultsPublished
                                           }
                                           className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs sm:text-sm"
+                                          title={resultsPublished ? "Cannot update status after results are published" : ""}
                                         >
                                           Reject
                                         </Button>
@@ -1555,6 +1586,8 @@ export default function DepartmentPage() {
                             }
                           }}
                           variant="outline"
+                          disabled={isUpdating || resultsPublished}
+                          title={resultsPublished ? "Cannot update status after results are published" : ""}
                           className="border-2 border-green-600 hover:bg-green-600"
                         >
                           Accept
@@ -1576,6 +1609,8 @@ export default function DepartmentPage() {
                             }
                           }}
                           variant="outline"
+                          disabled={isUpdating || resultsPublished}
+                          title={resultsPublished ? "Cannot update status after results are published" : ""}
                           className="border-2 border-red-600 hover:bg-red-600"
                         >
                           Reject
@@ -1842,7 +1877,8 @@ export default function DepartmentPage() {
                           );
                         }
                       }}
-                      disabled={isUpdating}
+                      disabled={isUpdating || resultsPublished}
+                      title={resultsPublished ? "Cannot update status after results are published" : ""}
                       className="bg-green-600 hover:bg-green-700"
                     >
                       Shortlist
@@ -1861,7 +1897,8 @@ export default function DepartmentPage() {
                           );
                         }
                       }}
-                      disabled={isUpdating}
+                      disabled={isUpdating || resultsPublished}
+                      title={resultsPublished ? "Cannot update status after results are published" : ""}
                     >
                       Reject
                     </Button>
@@ -1878,7 +1915,8 @@ export default function DepartmentPage() {
                           );
                         }
                       }}
-                      disabled={isUpdating}
+                      disabled={isUpdating || resultsPublished}
+                      title={resultsPublished ? "Cannot update status after results are published" : ""}
                       className="border-gray-500 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-950/20"
                     >
                       Reset

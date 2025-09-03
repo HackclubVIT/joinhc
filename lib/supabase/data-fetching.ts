@@ -1799,6 +1799,12 @@ export async function updateApplicationStatus(
   const supabase = createClient();
 
   try {
+    // Check if results have been published
+    const resultsPublished = await areResultsPublished();
+    if (resultsPublished) {
+      throw new Error('Cannot update application status after results have been published');
+    }
+
     const updateField =
       preference === "first" ? "first_pref_status" : "second_pref_status";
 
@@ -2183,6 +2189,32 @@ export async function getResultsPublicationDeadline() {
   
   if (error && error.code !== 'PGRST116') throw error;
   return data?.deadline ? new Date(data.deadline) : null;
+}
+
+export async function areResultsPublished(): Promise<boolean> {
+  const supabase = createClient();
+  try {
+    const { data, error } = await supabase
+      .from('application_settings')
+      .select('deadline')
+      .eq('deadline_name', 'results_publication')
+      .single();
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error checking results publication status:', error);
+      return false;
+    }
+    
+    if (!data?.deadline) return false;
+    
+    const publicationDate = new Date(data.deadline);
+    const now = new Date();
+    
+    return now >= publicationDate;
+  } catch (err) {
+    console.error('Error in areResultsPublished:', err);
+    return false;
+  }
 }
 
 export async function publishResults() {
