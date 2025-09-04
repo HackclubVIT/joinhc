@@ -374,7 +374,7 @@ export default function DepartmentPage() {
     } catch (err: any) {
       console.error("Error updating status:", err);
       
-      // Handle specific error for results published
+      
       if (err.message?.includes('after results have been published')) {
         toast({
           title: "Cannot Update Status",

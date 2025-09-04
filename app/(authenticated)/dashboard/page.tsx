@@ -44,6 +44,7 @@ import {
   isApplicantAssignedToPanel,
   isApplicantEvaluated,
   getResultsPublicationDeadline,
+  areResultsPublished,
 } from "@/lib/supabase/data-fetching";
 import { createClient } from "@/lib/supabase/client";
 import { HackClubLogo } from "@/components/hackclub-logo";
@@ -394,7 +395,7 @@ export default function ApplicantDashboard() {
           return (
             <Badge className="bg-red-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
               <XCircle className="h-3 w-3 mr-1" />
-              Not Selected
+              Rejected
             </Badge>
           );
         case 'shortlisted':
@@ -805,11 +806,13 @@ export default function ApplicantDashboard() {
                       {/* First Preference Card */}
                       <div
                         className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
-                          application.first_pref_status === "accepted"
+                          shouldShowResults() && application.first_pref_status === "accepted"
                             ? "bg-gradient-to-br from-green-900/40 to-emerald-900/20 border-green-500/50 shadow-green-500/10"
-                            : application.first_pref_status === "rejected"
+                            : shouldShowResults() && application.first_pref_status === "rejected"
                             ? "bg-gradient-to-br from-red-900/40 to-rose-900/20 border-red-500/50 shadow-red-500/10"
-                            : application.first_pref_status === "shortlisted"
+                            : application.first_pref_status === "not_selected"
+                            ? "bg-gradient-to-br from-red-900/40 to-rose-900/20 border-red-500/50 shadow-red-500/10"
+                            : (application.first_pref_status === "shortlisted" || (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected")))
                             ? "bg-gradient-to-br from-blue-900/40 to-indigo-900/20 border-blue-500/50 shadow-blue-500/10"
                             : application.first_pref_status === "waitlisted"
                             ? "bg-gradient-to-br from-yellow-900/40 to-amber-900/20 border-yellow-500/50 shadow-yellow-500/10"
@@ -824,11 +827,13 @@ export default function ApplicantDashboard() {
                           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                             <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-xl ${
-                                application.first_pref_status === "accepted"
+                                shouldShowResults() && application.first_pref_status === "accepted"
                                   ? "bg-green-500/20 text-green-400"
-                                  : application.first_pref_status === "rejected"
+                                  : shouldShowResults() && application.first_pref_status === "rejected"
                                   ? "bg-red-500/20 text-red-400"
-                                  : application.first_pref_status === "shortlisted"
+                                  : application.first_pref_status === "not_selected"
+                                  ? "bg-red-500/20 text-red-400"
+                                  : (application.first_pref_status === "shortlisted" || (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected")))
                                   ? "bg-blue-500/20 text-blue-400"
                                   : application.first_pref_status === "waitlisted"
                                   ? "bg-yellow-500/20 text-yellow-400"
@@ -838,11 +843,13 @@ export default function ApplicantDashboard() {
                               </div>
                               <div>
                                 <span className={`text-sm font-semibold tracking-wide uppercase ${
-                                  application.first_pref_status === "accepted"
+                                  shouldShowResults() && application.first_pref_status === "accepted"
                                     ? "text-green-400"
-                                    : application.first_pref_status === "rejected"
+                                    : shouldShowResults() && application.first_pref_status === "rejected"
                                     ? "text-red-400"
-                                    : application.first_pref_status === "shortlisted"
+                                    : application.first_pref_status === "not_selected"
+                                    ? "text-red-400"
+                                    : (application.first_pref_status === "shortlisted" || (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected")))
                                     ? "text-blue-400"
                                     : application.first_pref_status === "waitlisted"
                                     ? "text-yellow-400"
@@ -859,11 +866,13 @@ export default function ApplicantDashboard() {
                             {/* Status Badges */}
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge className={`text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full ${
-                                application.first_pref_status === "accepted"
+                                shouldShowResults() && application.first_pref_status === "accepted"
                                   ? "bg-green-600/80 backdrop-blur-sm"
-                                  : application.first_pref_status === "rejected"
+                                  : shouldShowResults() && application.first_pref_status === "rejected"
                                   ? "bg-red-600/80 backdrop-blur-sm"
-                                  : application.first_pref_status === "shortlisted"
+                                  : application.first_pref_status === "not_selected"
+                                  ? "bg-red-600/80 backdrop-blur-sm"
+                                  : (application.first_pref_status === "shortlisted" || (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected")))
                                   ? "bg-blue-600/80 backdrop-blur-sm"
                                   : application.first_pref_status === "waitlisted"
                                   ? "bg-yellow-600/80 backdrop-blur-sm"
@@ -1076,7 +1085,7 @@ export default function ApplicantDashboard() {
                         )}
                         
                         {/* Rejection Message for First Preference */}
-                        {(application.first_pref_status === "not_selected" || application.first_pref_status === "rejected") && (
+                        {((shouldShowResults() && application.first_pref_status === "rejected") || application.first_pref_status === "not_selected") && (
                           <div className="mt-4">
                             <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
                               <div className="flex items-center gap-2">
@@ -1098,11 +1107,11 @@ export default function ApplicantDashboard() {
                       {/* Second Preference Card */}
                       <div
                         className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
-                          application.second_pref_status === "accepted"
+                          shouldShowResults() && application.second_pref_status === "accepted"
                             ? "bg-gradient-to-br from-green-900/40 to-emerald-900/20 border-green-500/50 shadow-green-500/10"
-                            : application.second_pref_status === "rejected"
+                            : shouldShowResults() && application.second_pref_status === "rejected"
                             ? "bg-gradient-to-br from-red-900/40 to-rose-900/20 border-red-500/50 shadow-red-500/10"
-                            : application.second_pref_status === "shortlisted"
+                            : (application.second_pref_status === "shortlisted" || (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected")))
                             ? "bg-gradient-to-br from-blue-900/40 to-indigo-900/20 border-blue-500/50 shadow-blue-500/10"
                             : application.second_pref_status === "waitlisted"
                             ? "bg-gradient-to-br from-yellow-900/40 to-amber-900/20 border-yellow-500/50 shadow-yellow-500/10"
@@ -1117,11 +1126,11 @@ export default function ApplicantDashboard() {
                           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                             <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-xl ${
-                                application.second_pref_status === "accepted"
+                                shouldShowResults() && application.second_pref_status === "accepted"
                                   ? "bg-green-500/20 text-green-400"
-                                  : application.second_pref_status === "rejected"
+                                  : shouldShowResults() && application.second_pref_status === "rejected"
                                   ? "bg-red-500/20 text-red-400"
-                                  : application.second_pref_status === "shortlisted"
+                                  : (application.second_pref_status === "shortlisted" || (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected")))
                                   ? "bg-blue-500/20 text-blue-400"
                                   : application.second_pref_status === "waitlisted"
                                   ? "bg-yellow-500/20 text-yellow-400"
@@ -1131,11 +1140,11 @@ export default function ApplicantDashboard() {
                               </div>
                               <div>
                                 <span className={`text-sm font-semibold tracking-wide uppercase ${
-                                  application.second_pref_status === "accepted"
+                                  shouldShowResults() && application.second_pref_status === "accepted"
                                     ? "text-green-400"
-                                    : application.second_pref_status === "rejected"
+                                    : shouldShowResults() && application.second_pref_status === "rejected"
                                     ? "text-red-400"
-                                    : application.second_pref_status === "shortlisted"
+                                    : (application.second_pref_status === "shortlisted" || (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected")))
                                     ? "text-blue-400"
                                     : application.second_pref_status === "waitlisted"
                                     ? "text-yellow-400"
@@ -1152,11 +1161,13 @@ export default function ApplicantDashboard() {
                             {/* Status Badges */}
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge className={`text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full ${
-                                application.second_pref_status === "accepted"
+                                shouldShowResults() && application.second_pref_status === "accepted"
                                   ? "bg-green-600/80 backdrop-blur-sm"
-                                  : application.second_pref_status === "rejected"
+                                  : shouldShowResults() && application.second_pref_status === "rejected"
                                   ? "bg-red-600/80 backdrop-blur-sm"
-                                  : application.second_pref_status === "shortlisted"
+                                  : application.second_pref_status === "not_selected"
+                                  ? "bg-red-600/80 backdrop-blur-sm"
+                                  : (application.second_pref_status === "shortlisted" || (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected")))
                                   ? "bg-blue-600/80 backdrop-blur-sm"
                                   : application.second_pref_status === "waitlisted"
                                   ? "bg-yellow-600/80 backdrop-blur-sm"
@@ -1369,7 +1380,7 @@ export default function ApplicantDashboard() {
                           )}
                           
                           {/* Rejection Message for Second Preference */}
-                          {(application.second_pref_status === "not_selected" || application.second_pref_status === "rejected") && (
+                          {((shouldShowResults() && application.second_pref_status === "rejected") || application.second_pref_status === "not_selected") && (
                             <div className="mt-4">
                               <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
                                 <div className="flex items-center gap-2">

@@ -1799,7 +1799,7 @@ export async function updateApplicationStatus(
   const supabase = createClient();
 
   try {
-    // Check if results have been published
+    
     const resultsPublished = await areResultsPublished();
     if (resultsPublished) {
       throw new Error('Cannot update application status after results have been published');
