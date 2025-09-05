@@ -513,7 +513,7 @@ export default function RecruiterDashboard() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="grid grid-cols-3 gap-2 text-xs">
                             <div className="text-center p-2 rounded bg-yellow-500/10">
                               <div className="font-bold text-yellow-600">
                                 {dept.pendingCount}
@@ -528,6 +528,14 @@ export default function RecruiterDashboard() {
                               </div>
                               <div className="text-muted-foreground">
                                 Shortlisted
+                              </div>
+                            </div>
+                            <div className="text-center p-2 rounded bg-emerald-500/10">
+                              <div className="font-bold text-emerald-600">
+                                {dept.acceptedCount}
+                              </div>
+                              <div className="text-muted-foreground">
+                                Accepted
                               </div>
                             </div>
                           </div>
