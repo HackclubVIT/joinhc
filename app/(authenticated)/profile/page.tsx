@@ -164,7 +164,7 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          <div className="grid gap-6 sm:gap-8 lg:grid-cols-2">
+          <div className={`gap-6 sm:gap-8 ${userRole === "recruiter" ? "grid lg:grid-cols-2" : "flex justify-center"}`}>
             {userRole === "recruiter" ? (
               <>
                 {/* Recruiter Personal Information */}
@@ -344,171 +344,10 @@ export default function ProfilePage() {
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Application Summary */}
-                <Card className="hackclub-card !p-0 overflow-hidden">
-                  <div className="bg-gradient-to-r from-green-50/80 to-blue-50/80 dark:from-green-950/20 dark:to-blue-950/20 p-6 border-b border-border">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-full bg-green-100/80 dark:bg-green-900/50 border border-green-200 dark:border-green-800">
-                        <Building className="h-6 w-6 text-green-600 dark:text-green-400" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-xl font-semibold">
-                          Application Summary
-                        </CardTitle>
-                        <CardDescription>
-                          Your recruitment application details
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </div>
-                  <CardContent className="p-6">
-                    {application ? (
-                      <div className="space-y-6">
-                        {/* Overall Status */}
-                        <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <p className="text-sm font-medium text-muted-foreground">
-                                Overall Application Status
-                              </p>
-                              {getStatusIcon(
-                                getOverallApplicationStatus(application),
-                              )}
-                            </div>
-                            <Badge
-                              variant="outline"
-                              className="text-base font-medium px-3 py-1"
-                            >
-                              {getOverallApplicationStatus(application)
-                                .charAt(0)
-                                .toUpperCase() +
-                                getOverallApplicationStatus(application).slice(1)}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {/* Individual Preference Status */}
-                        <div className="space-y-4">
-                          <div
-                            className={`p-4 rounded-lg border ${application.first_pref_status === "shortlisted"
-                              ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
-                              : application.first_pref_status === "waitlisted"
-                                ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
-                                : application.first_pref_status === "rejected"
-                                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
-                                  : "bg-primary/5 border-primary/20"
-                              }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-sm font-medium text-primary">
-                                First Preference
-                              </p>
-                              <div className="flex items-center gap-2">
-                                <Badge className="bg-primary text-white">
-                                  1st
-                                </Badge>
-                                {application.first_pref_status ===
-                                  "shortlisted" && (
-                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                      ✓ Selected
-                                    </Badge>
-                                  )}
-                                {application.first_pref_status ===
-                                  "waitlisted" && (
-                                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                                      Waitlisted
-                                    </Badge>
-                                  )}
-                                {application.first_pref_status === "rejected" && (
-                                  <Badge variant="destructive">Rejected</Badge>
-                                )}
-                              </div>
-                            </div>
-                            <p className="font-semibold text-foreground">
-                              {application.firstPrefDept}
-                            </p>
-                          </div>
-
-                          <div
-                            className={`p-4 rounded-lg border ${application.second_pref_status === "shortlisted"
-                              ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
-                              : application.second_pref_status === "waitlisted"
-                                ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
-                                : application.second_pref_status === "rejected"
-                                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
-                                  : "bg-secondary/50 border-border"
-                              }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-sm font-medium text-muted-foreground">
-                                Second Preference
-                              </p>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary">2nd</Badge>
-                                {application.second_pref_status ===
-                                  "shortlisted" && (
-                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                      ✓ Selected
-                                    </Badge>
-                                  )}
-                                {application.second_pref_status ===
-                                  "waitlisted" && (
-                                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                                      Waitlisted
-                                    </Badge>
-                                  )}
-                                {application.second_pref_status ===
-                                  "rejected" && (
-                                    <Badge variant="destructive">Rejected</Badge>
-                                  )}
-                              </div>
-                            </div>
-                            <p className="font-semibold text-foreground">
-                              {application.secondPrefDept}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Submission Date */}
-                        <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50 border border-border">
-                          <Calendar className="h-5 w-5 text-muted-foreground" />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-muted-foreground">
-                              Submitted On
-                            </p>
-                            <p className="font-semibold text-foreground">
-                              {new Date(
-                                application.created_at,
-                              ).toLocaleDateString("en-IN", {
-                                timeZone: "Asia/Kolkata",
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-secondary/50 flex items-center justify-center border border-border">
-                          <Building className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                        <p className="text-muted-foreground font-medium">
-                          No application submitted yet
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1 mb-4">
-                          Submit your application to see details here
-                        </p>
-                        <Button className="hackclub-button" asChild>
-                          <a href="/application">Submit Application</a>
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
               </>
             ) : (
               <>
-                <Card className="hackclub-card overflow-hidden">
+                <Card className="hackclub-card overflow-hidden max-w-md w-full">
                   <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6 border-b border-border">
                     <div className="flex items-center gap-3">
                       <div className="p-3 rounded-full bg-primary/10 border border-primary/20">
