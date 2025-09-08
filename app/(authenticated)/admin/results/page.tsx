@@ -476,7 +476,7 @@ export default function AdminResultsPage() {
                       </p>
                     </div>
                     
-                    <Button
+                    {/* <Button
                       onClick={handlePublishResults}
                       disabled={isPublishing}
                       className="bg-green-600 hover:bg-green-700 text-white px-8 py-3"
@@ -492,7 +492,7 @@ export default function AdminResultsPage() {
                           Publish Results Now
                         </div>
                       )}
-                    </Button>
+                    </Button> */}
                   </>
                 ) : (
                   <div className="text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-4">
