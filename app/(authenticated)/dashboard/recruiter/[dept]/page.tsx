@@ -60,6 +60,7 @@ import { useAuth } from "@/contexts/auth-context";
 import {
   getDepartmentApplicants,
   getDepartmentApplicantsOptimized,
+  getAllApplicationsForExport,
   getDepartmentNameById,
   updateApplicationStatus,
   getOverallApplicationStatus,
@@ -80,6 +81,7 @@ import {
   getApplicationDeadline,
   getShortlistDeadline,
   isCurrentUserRecruiterForDepartment,
+  areResultsPublished,
 } from "@/lib/supabase/data-fetching";
 import { HackClubLogo } from "@/components/hackclub-logo";
 import {
@@ -105,6 +107,7 @@ export default function DepartmentPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [preferenceFilter, setPreferenceFilter] = useState("all");
   const [applicants, setApplicants] = useState<Application[]>([]);
+  const [allApplicants, setAllApplicants] = useState<Application[]>([]);
   const [filteredApplicants, setFilteredApplicants] = useState<Application[]>(
     []
   );
@@ -132,6 +135,10 @@ export default function DepartmentPage() {
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRecruiterForDepartment, setIsRecruiterForDepartment] = useState(false);
+  const [isAddingRecruiter, setIsAddingRecruiter] = useState(false);
+  const [removingRecruiterId, setRemovingRecruiterId] = useState<string | null>(null);
+  const [selectedRecruiterValue, setSelectedRecruiterValue] = useState<string>("");
+  const [resultsPublished, setResultsPublished] = useState(false);
 
   const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("");
   const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("");
@@ -152,6 +159,7 @@ export default function DepartmentPage() {
       totalEvaluators: number;
     } | null;
   }>({});
+  const [isLoadingEvaluations, setIsLoadingEvaluations] = useState(false);
 
   const [isPanelDialogOpen, setIsPanelDialogOpen] = useState(false);
   const [panelDialogTab, setPanelDialogTab] = useState('recruiters');
@@ -174,35 +182,18 @@ export default function DepartmentPage() {
 
   useEffect(() => {
     fetchPanelMembers();
+    setSelectedRecruiterValue(""); 
   }, [selectedPanel]);
 
   
+  useEffect(() => {
+    setSelectedRecruiterValue("");
+  }, [departmentRecruiters]);
+
+  
   
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (selectedApplicant) {
-        
-        const now = new Date();
-        const shouldFetchEvaluations = shortlistDeadline && now > shortlistDeadline;
-        
-        if (shouldFetchEvaluations) {
-          const [marks, average] = await Promise.all([
-            getApplicantMarks(selectedApplicant.id, deptId),
-            getApplicantAverageMarks(selectedApplicant.id, deptId)
-          ]);
-          setEvaluations(marks);
-          setAverageMarks(average);
-        } else {
-          
-          setEvaluations([]);
-          setAverageMarks(null);
-        }
-      }
-    };
-
-    fetchData();
-  }, [isMarksDialogOpen, selectedApplicant, deptId, shortlistDeadline]);
+  
 
   useEffect(() => {
     if (panels.length > 0) return;
@@ -237,35 +228,17 @@ export default function DepartmentPage() {
         const appDeadlineObj = applicationDeadline ? { deadline: applicationDeadline.toISOString() } : null;
         const shortlistDeadlineObj = shortlistDeadline ? { deadline: shortlistDeadline.toISOString() } : null;
 
-        const data = await getDepartmentApplicantsOptimized(deptId, appDeadlineObj, shortlistDeadlineObj);
+        const [data, allData] = await Promise.all([
+          getDepartmentApplicantsOptimized(deptId, appDeadlineObj, shortlistDeadlineObj),
+          getAllApplicationsForExport(deptId) 
+        ]);
+        
         setApplicants(data);
+        setAllApplicants(allData);
 
         
-        const now = new Date();
-        const shouldFetchEvaluations = shortlistDeadline && now > shortlistDeadline;
-
-        const averages: { [applicantId: string]: { average: number; totalEvaluators: number } | null } = {};
-
-        if (shouldFetchEvaluations) {
-          for (const applicant of data) {
-            try {
-              const avgData = await getApplicantAverageMarks(applicant.id, deptId);
-              if (avgData) {
-                averages[applicant.id] = {
-                  average: avgData.average,
-                  totalEvaluators: avgData.totalEvaluators
-                };
-              } else {
-                averages[applicant.id] = null;
-              }
-            } catch (err) {
-              console.error(`Error fetching average for applicant ${applicant.id}:`, err);
-              averages[applicant.id] = null;
-            }
-          }
-        }
-
-        setApplicantAverages(averages);
+        
+        
       } catch (err) {
         console.error("Error fetching applicants:", err);
       } finally {
@@ -316,17 +289,20 @@ export default function DepartmentPage() {
   useEffect(() => {
     async function fetchDeadlines() {
       try {
-        const [appDL, shortDL] = await Promise.all([
+        const [appDL, shortDL, resultsPublishedStatus] = await Promise.all([
           getApplicationDeadline(),
           getShortlistDeadline(),
+          areResultsPublished(),
         ]);
         setApplicationDeadline(appDL?.deadline ? new Date(appDL.deadline) : null);
         setShortlistDeadline(shortDL?.deadline ? new Date(shortDL.deadline) : null);
+        setResultsPublished(resultsPublishedStatus);
       } catch (err) {
         setApplicationDeadline(null);
         setShortlistDeadline(null);
+        setResultsPublished(false);
       } finally {
-        setDeadlinesLoaded(true); // Mark deadlines as loaded
+        setDeadlinesLoaded(true); 
       }
     }
     fetchDeadlines();
@@ -388,9 +364,30 @@ export default function DepartmentPage() {
           return app;
         })
       );
+      
+      toast({
+        title: "Success",
+        description: `Application status updated to ${newStatus}`,
+      });
+      
       return data;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error updating status:", err);
+      
+      
+      if (err.message?.includes('after results have been published')) {
+        toast({
+          title: "Cannot Update Status",
+          description: "Results have been published. Application status can no longer be changed.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: err.message || "Failed to update application status",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -442,25 +439,52 @@ export default function DepartmentPage() {
     return "bg-red-100 text-red-800 border-red-200";
   };
 
+  
+  const fetchEvaluationsForApplicant = async (applicantId: string) => {
+    setIsLoadingEvaluations(true);
+    try {
+      const [evaluationsData, averageData] = await Promise.all([
+        getApplicantMarks(applicantId, deptId),
+        getApplicantAverageMarks(applicantId, deptId)
+      ]);
+      
+      setEvaluations(evaluationsData);
+      setAverageMarks(averageData);
+      
+      
+      if (averageData) {
+        setApplicantAverages(prev => ({
+          ...prev,
+          [applicantId]: {
+            average: averageData.average,
+            totalEvaluators: averageData.totalEvaluators
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching evaluations:', error);
+      setEvaluations([]);
+      setAverageMarks(null);
+    } finally {
+      setIsLoadingEvaluations(false);
+    }
+  };
+
   const departmentStats = {
-    totalApplicants: applicants.length,
-    firstPrefCount: applicants.filter(
+    
+    totalApplicants: allApplicants.filter(
+      (app) => app.first_pref_dept_id === deptId || app.second_pref_dept_id === deptId
+    ).length,
+    
+    firstPrefCount: allApplicants.filter(
       (app) => app.first_pref_dept_id === deptId
     ).length,
-    secondPrefCount: applicants.filter(
+    secondPrefCount: allApplicants.filter(
       (app) => app.second_pref_dept_id === deptId
     ).length,
-    pendingCount: applicants.filter((app) => {
-      
-      if (app.first_pref_dept_id === deptId) {
-        return app.first_pref_status === "pending";
-      } else if (app.second_pref_dept_id === deptId) {
-        return app.second_pref_status === "pending";
-      }
-      return false;
-    }).length,
-    shortlistedCount: applicants.filter((app) => {
-      
+    
+    
+    shortlistedCount: allApplicants.filter((app) => {
       if (app.first_pref_dept_id === deptId) {
         return app.first_pref_status === "shortlisted";
       } else if (app.second_pref_dept_id === deptId) {
@@ -468,17 +492,9 @@ export default function DepartmentPage() {
       }
       return false;
     }).length,
-    notSelectedCount: applicants.filter((app) => {
-      
-      if (app.first_pref_dept_id === deptId) {
-        return app.first_pref_status === "not_selected";
-      } else if (app.second_pref_dept_id === deptId) {
-        return app.second_pref_status === "not_selected";
-      }
-      return false;
-    }).length,
-    acceptedCount: applicants.filter((app) => {
-      
+    
+    
+    acceptedCount: allApplicants.filter((app) => {
       if (app.first_pref_dept_id === deptId) {
         return app.first_pref_status === "accepted";
       } else if (app.second_pref_dept_id === deptId) {
@@ -486,8 +502,27 @@ export default function DepartmentPage() {
       }
       return false;
     }).length,
+    
+    
+    pendingCount: applicants.filter((app) => {
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "pending";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "pending";
+      }
+      return false;
+    }).length,
+    
+    notSelectedCount: applicants.filter((app) => {
+      if (app.first_pref_dept_id === deptId) {
+        return app.first_pref_status === "not_selected";
+      } else if (app.second_pref_dept_id === deptId) {
+        return app.second_pref_status === "not_selected";
+      }
+      return false;
+    }).length,
+    
     rejectedCount: applicants.filter((app) => {
-      
       if (app.first_pref_dept_id === deptId) {
         return app.first_pref_status === "rejected";
       } else if (app.second_pref_dept_id === deptId) {
@@ -625,84 +660,57 @@ export default function DepartmentPage() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6 sm:mb-8">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-3 mb-6 sm:mb-8">
+            {/* 1st - Total Applications Received */}
             <div className="stats-card">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    Total Applicants
+                    Total Applications Received
                   </p>
                   <p className="text-2xl font-bold text-foreground">
                     {departmentStats.totalApplicants}
                   </p>
                 </div>
                 <div className="p-3 rounded-full bg-blue-500/20 border border-blue-500/50">
-                  <User className="h-5 w-5 text-blue-400" />
+                  <Users className="h-5 w-5 text-blue-400" />
                 </div>
               </div>
             </div>
 
+            {/* 2nd - Number of Shortlisted Applications */}
             <div className="stats-card">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    First Preference
+                    Shortlisted Applications
                   </p>
-                  <p className="text-2xl font-bold text-primary">
-                    {departmentStats.firstPrefCount}
-                  </p>
-                </div>
-                <div className="p-3 rounded-full bg-primary/20 border border-primary/50">
-                  <Star className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-            </div>
-
-            <div className="stats-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Pending Review
-                  </p>
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {departmentStats.pendingCount}
-                  </p>
-                </div>
-                <div className="p-3 rounded-full bg-yellow-500/20 border border-yellow-500/50">
-                  <Filter className="h-5 w-5 text-yellow-400" />
-                </div>
-              </div>
-            </div>
-
-            <div className="stats-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Shortlisted</p>
                   <p className="text-2xl font-bold text-green-600">
                     {departmentStats.shortlistedCount}
                   </p>
                 </div>
                 <div className="p-3 rounded-full bg-green-500/20 border border-green-500/50">
-                  <Download className="h-5 w-5 text-green-400" />
+                  <CheckCircle className="h-5 w-5 text-green-400" />
                 </div>
               </div>
             </div>
 
-            {currentPhase === 'interview' && (
-              <div className="stats-card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Accepted</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {departmentStats.acceptedCount}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-full bg-green-500/20 border border-green-500/50">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                  </div>
+            {/* 3rd - Number of Accepted Applications */}
+            <div className="stats-card">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Accepted Applications
+                  </p>
+                  <p className="text-2xl font-bold text-emerald-600">
+                    {departmentStats.acceptedCount}
+                  </p>
+                </div>
+                <div className="p-3 rounded-full bg-emerald-500/20 border border-emerald-500/50">
+                  <UserCheck className="h-5 w-5 text-emerald-400" />
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
           {canPanel && (
@@ -988,9 +996,11 @@ export default function DepartmentPage() {
                                           }
                                           disabled={
                                             currentStatus === "accepted" as any ||
-                                            isUpdating
+                                            isUpdating ||
+                                            resultsPublished
                                           }
                                           className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20 text-xs sm:text-sm"
+                                          title={resultsPublished ? "Cannot update status after results are published" : ""}
                                         >
                                           Accept
                                         </Button>
@@ -1006,9 +1016,12 @@ export default function DepartmentPage() {
                                             )
                                           }
                                           disabled={
-                                            currentStatus === "rejected" as any || isUpdating
+                                            currentStatus === "rejected" as any || 
+                                            isUpdating ||
+                                            resultsPublished
                                           }
                                           className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs sm:text-sm"
+                                          title={resultsPublished ? "Cannot update status after results are published" : ""}
                                         >
                                           Reject
                                         </Button>
@@ -1024,9 +1037,11 @@ export default function DepartmentPage() {
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          onClick={() => {
+                                          onClick={async () => {
                                             setSelectedApplicant(applicant);
                                             setIsMarksDialogOpen(true);
+                                            
+                                            await fetchEvaluationsForApplicant(applicant.id);
                                           }}
                                           className="border-2 text-xs sm:text-sm"
                                         >
@@ -1078,7 +1093,7 @@ export default function DepartmentPage() {
           {/* Panel Dialog with Tabs */}
           {canPanel && (
             <Dialog open={isPanelDialogOpen} onOpenChange={setIsPanelDialogOpen}>
-              <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden border-0">
+              <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto border-0">
                 <DialogHeader className="pb-4 border-b">
                   <DialogTitle className="text-2xl font-bold flex items-center gap-3">
                     <div className="p-2 bg-primary/10 rounded-lg">
@@ -1091,13 +1106,14 @@ export default function DepartmentPage() {
                   </DialogDescription>
                 </DialogHeader>
 
-                <Tabs value={panelDialogTab} onValueChange={setPanelDialogTab} className="flex-1">
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
-                    <TabsTrigger value="recruiters" className="flex items-center gap-2">
-                      <UserPlus className="h-4 w-4" />
-                      Manage Recruiters
-                    </TabsTrigger>
-                    <TabsTrigger value="applicants" className="flex items-center gap-2">
+                <div className="flex-1 overflow-y-auto">
+                  <Tabs value={panelDialogTab} onValueChange={setPanelDialogTab} className="h-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-6">
+                      <TabsTrigger value="recruiters" className="flex items-center gap-2">
+                        <UserPlus className="h-4 w-4" />
+                        Manage Recruiters
+                      </TabsTrigger>
+                      <TabsTrigger value="applicants" className="flex items-center gap-2">
                       <UserCheck className="h-4 w-4" />
                       Assign Applicants
                     </TabsTrigger>
@@ -1107,40 +1123,114 @@ export default function DepartmentPage() {
                     <div className="bg-muted/30 rounded-lg p-4">
                       <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                         <UserPlus className="h-4 w-4" />
-                        Add Recruiter to Panel
+                        Assign Recruiters to Panel
                       </h3>
-                      <div className="flex gap-3 items-end">
-                        <div className="flex-1">
-                          <label className="text-sm font-medium mb-2 block">Select Recruiter</label>
-                          <Select
-                            onValueChange={async (value) => {
-                              if (selectedPanel) {
-                                const res = await addRecruiterToPanel(
-                                  value,
-                                  deptId,
-                                  selectedPanel?.id
+                      <p className="text-sm text-muted-foreground">
+                        Manage recruiter assignments to this panel. Only unassigned recruiters from this department can be added.
+                      </p>
+                    </div>
+
+                    <div className="bg-card border rounded-lg overflow-hidden">
+                      <div className="p-4 border-b bg-muted/30">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Available Recruiters
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {departmentRecruiters.length} recruiter{departmentRecruiters.length !== 1 ? 's' : ''} available for assignment
+                        </p>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        {departmentRecruiters.length === 0 ? (
+                          <div className="p-8 text-center">
+                            <UserPlus className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                            <p className="text-muted-foreground font-medium">No available recruiters found</p>
+                            <p className="text-sm text-muted-foreground mt-1">All recruiters from this department are already assigned to panels</p>
+                          </div>
+                        ) : (
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/30">
+                                <TableHead className="font-semibold">Recruiter Name</TableHead>
+                                <TableHead className="font-semibold">Email</TableHead>
+                                <TableHead className="font-semibold">Assignment Status</TableHead>
+                                <TableHead className="font-semibold text-right">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {departmentRecruiters.map((recruiter) => {
+                                const isAssignedToThisPanel = panelMembers.some(member => member.id === recruiter.id);
+                                
+                                return (
+                                  <TableRow key={recruiter.id} className="hover:bg-muted/30">
+                                    <TableCell className="font-medium">{recruiter.name}</TableCell>
+                                    <TableCell className="text-muted-foreground">{recruiter.email}</TableCell>
+                                    <TableCell>
+                                      {isAssignedToThisPanel ? (
+                                        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                                          <CheckCircle className="h-3 w-3 mr-1" />
+                                          Assigned to this panel
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="bg-gray-50 text-gray-600">
+                                          <Clock className="h-3 w-3 mr-1" />
+                                          Available
+                                        </Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <div className="flex gap-2 justify-end">
+                                        <Button
+                                          size="sm"
+                                          variant={isAssignedToThisPanel ? 'default' : 'outline'}
+                                          disabled={isAssignedToThisPanel || isAddingRecruiter}
+                                          onClick={async () => {
+                                            if (selectedPanel && !isAddingRecruiter) {
+                                              setIsAddingRecruiter(true);
+                                              try {
+                                                const res = await addRecruiterToPanel(
+                                                  recruiter.id,
+                                                  deptId,
+                                                  selectedPanel?.id
+                                                );
+                                                if (res) {
+                                                  toast({ title: 'Success', description: 'Recruiter added to panel successfully' });
+                                                  fetchPanelMembers(); 
+                                                } else {
+                                                  toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
+                                                }
+                                              } catch (error) {
+                                                toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
+                                              } finally {
+                                                setIsAddingRecruiter(false);
+                                              }
+                                            }
+                                          }}
+                                          className={isAssignedToThisPanel ? 'bg-green-600 hover:bg-green-700' : ''}
+                                        >
+                                          {isAssignedToThisPanel ? (
+                                            <>
+                                              <CheckCircle className="h-4 w-4 mr-1" />
+                                              Assigned
+                                            </>
+                                          ) : isAddingRecruiter ? (
+                                            'Adding...'
+                                          ) : (
+                                            <>
+                                              <UserPlus className="h-4 w-4 mr-1" />
+                                              Assign
+                                            </>
+                                          )}
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
                                 );
-                                if (res) {
-                                  toast({ title: 'Success', description: 'Recruiter added to panel successfully' });
-                                  setPanelMembers([]);
-                                } else {
-                                  toast({ title: 'Error', description: 'Failed to add recruiter to panel', variant: 'destructive' });
-                                }
-                              }
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Choose a recruiter to add..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {departmentRecruiters.map((recruiter) => (
-                                <SelectItem value={recruiter.id} key={recruiter.id}>
-                                  {recruiter.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                              })}
+                            </TableBody>
+                          </Table>
+                        )}
                       </div>
                     </div>
 
@@ -1180,24 +1270,30 @@ export default function DepartmentPage() {
                                       size="sm"
                                       variant="outline"
                                       onClick={async () => {
-                                        if (!selectedPanel?.id) return;
-                                        const res = await removeRecruiterFromPanel(
-                                          member.id,
-                                          selectedPanel?.id
-                                        );
-                                        if (res) {
-                                          toast({ title: 'Success', description: 'Recruiter removed from panel successfully' });
-                                          setPanelMembers((prev) =>
-                                            prev.filter((m) => m.id !== member.id)
+                                        if (!selectedPanel?.id || removingRecruiterId === member.id) return;
+                                        setRemovingRecruiterId(member.id);
+                                        try {
+                                          const res = await removeRecruiterFromPanel(
+                                            member.id,
+                                            selectedPanel?.id
                                           );
-                                        } else {
+                                          if (res) {
+                                            toast({ title: 'Success', description: 'Recruiter removed from panel successfully' });
+                                            fetchPanelMembers(); 
+                                          } else {
+                                            toast({ title: 'Error', description: 'Failed to remove recruiter', variant: 'destructive' });
+                                          }
+                                        } catch (error) {
                                           toast({ title: 'Error', description: 'Failed to remove recruiter', variant: 'destructive' });
+                                        } finally {
+                                          setRemovingRecruiterId(null);
                                         }
                                       }}
+                                      disabled={removingRecruiterId === member.id}
                                       className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
                                     >
                                       <Trash2 className="h-4 w-4 mr-1" />
-                                      Remove
+                                      {removingRecruiterId === member.id ? 'Removing...' : 'Remove'}
                                     </Button>
                                   </TableCell>
                                 </TableRow>
@@ -1412,6 +1508,7 @@ export default function DepartmentPage() {
                     </div>
                   </TabsContent>
                 </Tabs>
+                </div>
               </DialogContent>
             </Dialog>
           )}
@@ -1489,6 +1586,8 @@ export default function DepartmentPage() {
                             }
                           }}
                           variant="outline"
+                          disabled={isUpdating || resultsPublished}
+                          title={resultsPublished ? "Cannot update status after results are published" : ""}
                           className="border-2 border-green-600 hover:bg-green-600"
                         >
                           Accept
@@ -1510,6 +1609,8 @@ export default function DepartmentPage() {
                             }
                           }}
                           variant="outline"
+                          disabled={isUpdating || resultsPublished}
+                          title={resultsPublished ? "Cannot update status after results are published" : ""}
                           className="border-2 border-red-600 hover:bg-red-600"
                         >
                           Reject
@@ -1526,7 +1627,12 @@ export default function DepartmentPage() {
                   </div>
                 </DialogHeader>
 
-                {selectedApplicant && evaluations.length > 0 ? (
+                {isLoadingEvaluations ? (
+                  <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-muted-foreground">Loading evaluations...</p>
+                  </div>
+                ) : selectedApplicant && evaluations.length > 0 ? (
                   <div className="space-y-6">
                     {/* Average Marks Summary */}
                     {averageMarks && (
@@ -1771,7 +1877,8 @@ export default function DepartmentPage() {
                           );
                         }
                       }}
-                      disabled={isUpdating}
+                      disabled={isUpdating || resultsPublished}
+                      title={resultsPublished ? "Cannot update status after results are published" : ""}
                       className="bg-green-600 hover:bg-green-700"
                     >
                       Shortlist
@@ -1790,7 +1897,8 @@ export default function DepartmentPage() {
                           );
                         }
                       }}
-                      disabled={isUpdating}
+                      disabled={isUpdating || resultsPublished}
+                      title={resultsPublished ? "Cannot update status after results are published" : ""}
                     >
                       Reject
                     </Button>
@@ -1807,7 +1915,8 @@ export default function DepartmentPage() {
                           );
                         }
                       }}
-                      disabled={isUpdating}
+                      disabled={isUpdating || resultsPublished}
+                      title={resultsPublished ? "Cannot update status after results are published" : ""}
                       className="border-gray-500 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-950/20"
                     >
                       Reset

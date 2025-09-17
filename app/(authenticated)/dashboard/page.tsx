@@ -32,11 +32,10 @@ import {
   getApplicationForUser,
   getApplicationSettings,
   getDepartments,
-  getMeetLinkByPanelId,
+  getMeetLinksByPanelIds,
   getOverallApplicationStatus,
   getPreferenceSelectionInfo,
-  getApplicationDeadline,
-  getShortlistDeadline,
+  getAllDeadlines,
   getAvailableTimeSlotsForPanel,
   getApplicantTimeSlot,
   bookApplicantTimeSlot,
@@ -45,10 +44,12 @@ import {
   isApplicantAssignedToPanel,
   isApplicantEvaluated,
   getResultsPublicationDeadline,
+  areResultsPublished,
 } from "@/lib/supabase/data-fetching";
 import { createClient } from "@/lib/supabase/client";
 import { HackClubLogo } from "@/components/hackclub-logo";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 
@@ -88,6 +89,13 @@ export default function ApplicantDashboard() {
     return new Date(
       new Date(date).toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
     );
+  };
+
+  const hasSlotPassed = (booking: any) => {
+    if (!booking || !booking.end_time) return false;
+    const now = toIST(new Date());
+    const endTime = toIST(booking.end_time);
+    return now > endTime;
   };
   const fetchSlotData = async (pref: Pref) => {
     setSlotLoading((l) => ({ ...l, [pref]: true }));
@@ -147,10 +155,9 @@ export default function ApplicantDashboard() {
           return;
         }
 
-        const [applicationData, applicationDeadline, shortlistDeadlineData, resultsPublicationDeadlineData, departments] = await Promise.all([
+        const [applicationData, deadlineData, resultsPublicationDeadlineData, departments] = await Promise.all([
           getApplicationForUser(),
-          getApplicationDeadline(),
-          getShortlistDeadline(),
+          getAllDeadlines(),
           getResultsPublicationDeadline(),
           getDepartments(),
         ]);
@@ -170,20 +177,20 @@ export default function ApplicantDashboard() {
           });
 
           
-          const [first, second] = await Promise.all([
-            getMeetLinkByPanelId(applicationData.first_pref_panel_id),
-            getMeetLinkByPanelId(applicationData.second_pref_panel_id),
-          ]);
+          const meetLinksData = await getMeetLinksByPanelIds(
+            applicationData.first_pref_panel_id,
+            applicationData.second_pref_panel_id
+          );
 
-          setMeetLinks({ first, second });
+          setMeetLinks(meetLinksData);
         }
 
-        if (applicationDeadline?.deadline) {
-          setDeadline(new Date(applicationDeadline.deadline));
+        if (deadlineData.applicationDeadline?.deadline) {
+          setDeadline(new Date(deadlineData.applicationDeadline.deadline));
         }
         
-        if (shortlistDeadlineData?.deadline) {
-          setShortlistDeadline(new Date(shortlistDeadlineData.deadline));
+        if (deadlineData.shortlistDeadline?.deadline) {
+          setShortlistDeadline(new Date(deadlineData.shortlistDeadline.deadline));
         }
         
         if (resultsPublicationDeadlineData) {
@@ -240,31 +247,59 @@ export default function ApplicantDashboard() {
     }
   };
 
+  const shouldShowResults = () => {
+    if (!resultsPublicationDeadline) return false;
+    const now = new Date();
+    return now >= resultsPublicationDeadline;
+  };
+
   const getStatusMessage = (application: any) => {
     const overallStatus = getOverallApplicationStatus(application);
     const selectedInfo = getPreferenceSelectionInfo(application);
+
+    
+    const resultsPublished = shouldShowResults();
 
     const bothAccepted =
       application.first_pref_status === "accepted" &&
       application.second_pref_status === "accepted";
 
-    
     const bothShortlisted =
       application.first_pref_status === "shortlisted" &&
       application.second_pref_status === "shortlisted";
 
+    
+    const anyShortlistedOrBetter = 
+      application.first_pref_status === "shortlisted" || 
+      application.first_pref_status === "accepted" ||
+      application.second_pref_status === "shortlisted" ||
+      application.second_pref_status === "accepted";
+
+    
+    const effectiveStatus = !resultsPublished && (overallStatus === "accepted" || overallStatus === "rejected") 
+      ? "shortlisted" 
+      : overallStatus;
+
     let selectedDepartment = null;
-    if (bothAccepted) {
+    if (bothAccepted && resultsPublished) {
       selectedDepartment = `both ${departmentNames.first} and ${departmentNames.second}`;
-    } else if (bothShortlisted) {
-      selectedDepartment = `both ${departmentNames.first} and ${departmentNames.second}`;
+    } else if (bothShortlisted || (!resultsPublished && anyShortlistedOrBetter)) {
+      
+      if ((application.first_pref_status === "shortlisted" || application.first_pref_status === "accepted") &&
+          (application.second_pref_status === "shortlisted" || application.second_pref_status === "accepted")) {
+        selectedDepartment = `both ${departmentNames.first} and ${departmentNames.second}`;
+      } else if (application.first_pref_status === "shortlisted" || application.first_pref_status === "accepted") {
+        selectedDepartment = departmentNames.first;
+      } else if (application.second_pref_status === "shortlisted" || application.second_pref_status === "accepted") {
+        selectedDepartment = departmentNames.second;
+      }
     } else if (selectedInfo.type === "first") {
       selectedDepartment = departmentNames.first;
     } else if (selectedInfo.type === "second") {
       selectedDepartment = departmentNames.second;
     }
 
-    switch (overallStatus) {
+    switch (effectiveStatus) {
       case "accepted":
         return {
           title: bothShortlisted
@@ -272,20 +307,25 @@ export default function ApplicantDashboard() {
             : "Congratulations! You've been accepted 🎉",
           description: selectedDepartment
             ? bothShortlisted
-              ? `Amazing! You have been accepted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}. You'll need to choose which department to join.`
+              ? `Amazing! You have been accepted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}.`
               : `You have been accepted for ${selectedDepartment}.`
             : "You have been accepted!",
           color: "text-green-600 dark:text-green-400",
         };
 
       case "shortlisted":
+        
+        const showingBothPrefs = selectedDepartment?.includes("both") || 
+          ((application.first_pref_status === "shortlisted" || (!resultsPublished && application.first_pref_status === "accepted")) &&
+           (application.second_pref_status === "shortlisted" || (!resultsPublished && application.second_pref_status === "accepted")));
+
         return {
-          title: bothShortlisted
+          title: showingBothPrefs
             ? "Congratulations! You've been shortlisted for both preferences! 🎉🎉"
             : "Congratulations! You've been shortlisted 🎉",
           description: selectedDepartment
-            ? bothShortlisted
-              ? `Amazing! You have been shortlisted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}. You'll need to choose which department to join.`
+            ? showingBothPrefs
+              ? `Amazing! You have been shortlisted for both of your preferences: ${departmentNames.first} and ${departmentNames.second}.`
               : `You have been shortlisted for ${selectedDepartment}.`
             : "You have been shortlisted!",
           color: "text-green-600 dark:text-green-400",
@@ -317,7 +357,10 @@ export default function ApplicantDashboard() {
 
   const statusInfo = application ? getStatusMessage(application) : null;
   const overallStatus = application
-    ? getOverallApplicationStatus(application)
+    ? (shouldShowResults() ? getOverallApplicationStatus(application) : 
+       (getOverallApplicationStatus(application) === "accepted" || getOverallApplicationStatus(application) === "rejected") 
+       ? "shortlisted" 
+       : getOverallApplicationStatus(application))
     : "pending";
 
   const canShowMeetLink = (slot: any) => {
@@ -332,12 +375,6 @@ export default function ApplicantDashboard() {
     const d = toIST(date);
     if (isNaN(d.getTime())) return "—";
     return format(d, "yyyy-MM-dd HH:mm");
-  };
-
-  const shouldShowResults = () => {
-    if (!resultsPublicationDeadline) return false;
-    const now = new Date();
-    return now >= resultsPublicationDeadline;
   };
 
   const getStatusBadge = (status: string, preference: 'first' | 'second') => {
@@ -358,7 +395,7 @@ export default function ApplicantDashboard() {
           return (
             <Badge className="bg-red-500/90 text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full backdrop-blur-sm">
               <XCircle className="h-3 w-3 mr-1" />
-              Not Selected
+              Rejected
             </Badge>
           );
         case 'shortlisted':
@@ -769,11 +806,13 @@ export default function ApplicantDashboard() {
                       {/* First Preference Card */}
                       <div
                         className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
-                          application.first_pref_status === "accepted"
+                          shouldShowResults() && application.first_pref_status === "accepted"
                             ? "bg-gradient-to-br from-green-900/40 to-emerald-900/20 border-green-500/50 shadow-green-500/10"
-                            : application.first_pref_status === "rejected"
+                            : shouldShowResults() && application.first_pref_status === "rejected"
                             ? "bg-gradient-to-br from-red-900/40 to-rose-900/20 border-red-500/50 shadow-red-500/10"
-                            : application.first_pref_status === "shortlisted"
+                            : application.first_pref_status === "not_selected"
+                            ? "bg-gradient-to-br from-red-900/40 to-rose-900/20 border-red-500/50 shadow-red-500/10"
+                            : (application.first_pref_status === "shortlisted" || (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected")))
                             ? "bg-gradient-to-br from-blue-900/40 to-indigo-900/20 border-blue-500/50 shadow-blue-500/10"
                             : application.first_pref_status === "waitlisted"
                             ? "bg-gradient-to-br from-yellow-900/40 to-amber-900/20 border-yellow-500/50 shadow-yellow-500/10"
@@ -788,11 +827,13 @@ export default function ApplicantDashboard() {
                           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                             <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-xl ${
-                                application.first_pref_status === "accepted"
+                                shouldShowResults() && application.first_pref_status === "accepted"
                                   ? "bg-green-500/20 text-green-400"
-                                  : application.first_pref_status === "rejected"
+                                  : shouldShowResults() && application.first_pref_status === "rejected"
                                   ? "bg-red-500/20 text-red-400"
-                                  : application.first_pref_status === "shortlisted"
+                                  : application.first_pref_status === "not_selected"
+                                  ? "bg-red-500/20 text-red-400"
+                                  : (application.first_pref_status === "shortlisted" || (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected")))
                                   ? "bg-blue-500/20 text-blue-400"
                                   : application.first_pref_status === "waitlisted"
                                   ? "bg-yellow-500/20 text-yellow-400"
@@ -802,11 +843,13 @@ export default function ApplicantDashboard() {
                               </div>
                               <div>
                                 <span className={`text-sm font-semibold tracking-wide uppercase ${
-                                  application.first_pref_status === "accepted"
+                                  shouldShowResults() && application.first_pref_status === "accepted"
                                     ? "text-green-400"
-                                    : application.first_pref_status === "rejected"
+                                    : shouldShowResults() && application.first_pref_status === "rejected"
                                     ? "text-red-400"
-                                    : application.first_pref_status === "shortlisted"
+                                    : application.first_pref_status === "not_selected"
+                                    ? "text-red-400"
+                                    : (application.first_pref_status === "shortlisted" || (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected")))
                                     ? "text-blue-400"
                                     : application.first_pref_status === "waitlisted"
                                     ? "text-yellow-400"
@@ -823,11 +866,13 @@ export default function ApplicantDashboard() {
                             {/* Status Badges */}
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge className={`text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full ${
-                                application.first_pref_status === "accepted"
+                                shouldShowResults() && application.first_pref_status === "accepted"
                                   ? "bg-green-600/80 backdrop-blur-sm"
-                                  : application.first_pref_status === "rejected"
+                                  : shouldShowResults() && application.first_pref_status === "rejected"
                                   ? "bg-red-600/80 backdrop-blur-sm"
-                                  : application.first_pref_status === "shortlisted"
+                                  : application.first_pref_status === "not_selected"
+                                  ? "bg-red-600/80 backdrop-blur-sm"
+                                  : (application.first_pref_status === "shortlisted" || (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected")))
                                   ? "bg-blue-600/80 backdrop-blur-sm"
                                   : application.first_pref_status === "waitlisted"
                                   ? "bg-yellow-600/80 backdrop-blur-sm"
@@ -838,29 +883,63 @@ export default function ApplicantDashboard() {
                           </div>
                           
                           {/* Content Section */}
-                          {application.first_pref_status === "shortlisted" && (
+                          {(application.first_pref_status === "shortlisted" || 
+                            (!shouldShowResults() && (application.first_pref_status === "accepted" || application.first_pref_status === "rejected"))) && (
                           <div className="mt-4">
-                            {!panelAssignments.first ? (
-                              <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                            {/* Congratulatory message for shortlisted applicants */}
+                            <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
+                              <div className="flex items-center gap-2">
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="font-semibold">Congratulations! 🎉</span>
+                              </div>
+                              <div className="text-xs text-green-300 mt-2">
+                                <p>You have been shortlisted and are through to the interview round for your first preference!</p>
+                              </div>
+                            </div>
+                            
+                            {/* Show ready message only if not evaluated AND slot hasn't passed */}
+                            {!evaluationStatus.first && !hasSlotPassed(slotData.first.booking) && (
+                              <div className="text-sm text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
                                 <div className="flex items-center gap-2">
                                   <Clock className="h-4 w-4" />
-                                  <span>Wait till the shortlist period to get over</span>
+                                  <span>Ready to book slots!</span>
                                 </div>
-                                <p className="text-xs text-amber-300 mt-1">
-                                  You'll be able to book slots once the shortlist period ends
-                                </p>
+                                <div className="text-xs text-blue-300 mt-2 space-y-1">
+                                  <p>• You can now book interview slots when they become available</p>
+                                  <p>• If no slots are visible, please wait for recruiters to schedule them</p>
+                                  <p>• You'll be added to the WhatsApp group soon for updates</p>
+                                </div>
                               </div>
-                            ) : evaluationStatus.first ? (
-                              <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                            )}
+
+                            {/* Show slot passed message if slot has passed but not yet evaluated */}
+                            {!evaluationStatus.first && hasSlotPassed(slotData.first.booking) && (
+                              <div className="text-sm text-orange-400 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-4">
                                 <div className="flex items-center gap-2">
-                                  <CheckCircle className="h-4 w-4" />
-                                  <span>Evaluation completed</span>
+                                  <Clock className="h-4 w-4" />
+                                  <span>Interview slot has passed</span>
                                 </div>
-                                <p className="text-xs text-green-300 mt-1">
-                                  Your interview has been completed and evaluated
-                                </p>
+                                <div className="text-xs text-orange-300 mt-1">
+                                  <p>Your interview slot has ended. Please wait for the evaluation results.</p>
+                                </div>
                               </div>
-                            ) : (
+                            )}
+                            
+                            {evaluationStatus.first ? (
+                              <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <CheckCircle className="h-4 w-4" />
+                                  <span className="font-semibold">Evaluation completed</span>
+                                </div>
+                                <div className="text-xs text-green-300 space-y-1">
+                                  <p>✅ Your interview has been completed and evaluated</p>
+                                  <p>⏳ Please wait for the final results - we will announce them soon</p>
+                                  <p>📢 You'll be notified via email and WhatsApp when results are published</p>
+                                </div>
+                              </div>
+                            ) : panelAssignments.first && (
                               <>
                                 {/* Debug info for troubleshooting Join Meet button */}
                                 {slotData.first.booking && (
@@ -880,8 +959,8 @@ export default function ApplicantDashboard() {
                                     </a>
                                   </div>
                                 )}
-                                {/* Meet link access info */}
-                                {slotData.first.booking && (
+                                {/* Meet link access info - only show if slot hasn't passed */}
+                                {slotData.first.booking && !hasSlotPassed(slotData.first.booking) && (
                                   <div className="text-xs text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 mb-2">
                                     <div className="flex items-center gap-2">
                                       <Clock className="h-3 w-3" />
@@ -889,21 +968,25 @@ export default function ApplicantDashboard() {
                                     </div>
                                   </div>
                                 )}
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setOpenSlotModal('first')}
-                                  disabled={evaluationStatus.first}
-                                  className="mb-2 w-full sm:w-auto text-sm sm:text-base"
-                                >
-                                  Book/Manage Slot
-                                </Button>
+                                {/* Only show Book/Manage Slot button if slot hasn't passed */}
+                                {!hasSlotPassed(slotData.first.booking) && (
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setOpenSlotModal('first')}
+                                    disabled={evaluationStatus.first}
+                                    className="mb-2 w-full sm:w-auto text-sm sm:text-base"
+                                  >
+                                    Book/Manage Slot
+                                  </Button>
+                                )}
                               </>
                             )}
                             <Dialog open={openSlotModal === 'first'} onOpenChange={(open) => setOpenSlotModal(open ? 'first' : null)}>
-                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
+                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
                                 <DialogHeader>
                                   <DialogTitle>First Preference Slot Booking</DialogTitle>
                                 </DialogHeader>
+                                <div className="flex-1 overflow-y-auto space-y-4">
                                 {slotLoading.first ? (
                                   <div>Loading slots...</div>
                                 ) : slotError.first ? (
@@ -917,8 +1000,13 @@ export default function ApplicantDashboard() {
                               <Button
                                 variant="outline"
                                         onClick={async () => {
-                                          await cancelApplicantTimeSlot(application.applicant_id, slotData.first.booking.panel_id);
-                                          fetchSlotData('first');
+                                          try {
+                                            await cancelApplicantTimeSlot(application.applicant_id, slotData.first.booking.panel_id);
+                                            toast.success('Slot cancelled successfully!');
+                                            fetchSlotData('first');
+                                          } catch (error: any) {
+                                            toast.error(error.message || 'Failed to cancel slot');
+                                          }
                                         }}
                                           className="w-full sm:w-auto text-sm"
                               >
@@ -929,9 +1017,9 @@ export default function ApplicantDashboard() {
                                 ) : (
                                   <div>
                                     <div className="mb-2">Select a slot:</div>
-                                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                    <div className="overflow-x-auto max-h-[300px] overflow-y-auto border rounded-md -mx-4 sm:mx-0">
                                       <Table className="min-w-full">
-                                        <TableHeader>
+                                        <TableHeader className="sticky top-0 bg-background">
                                           <TableRow>
                                             <TableHead>Start</TableHead>
                                             <TableHead>End</TableHead>
@@ -944,35 +1032,73 @@ export default function ApplicantDashboard() {
                                               <TableCell colSpan={3}>No available slots.</TableCell>
                                             </TableRow>
                                           ) : (
-                                            slotData.first.slots.map((slot: any) => (
-                                              <TableRow key={slot.id}>
-                                                <TableCell>{formatIST(slot.start_time)}</TableCell>
-                                                <TableCell>{formatIST(slot.end_time)}</TableCell>
+                                            slotData.first.slots.map((slot: any) => {
+                                              const now = new Date();
+                                              const slotStartTime = new Date(slot.start_time);
+                                              const isExpired = now >= slotStartTime;
+                                              
+                                              return (
+                                              <TableRow key={slot.id} className={isExpired ? 'opacity-60 bg-gray-50/50 pointer-events-none' : 'hover:bg-muted/50'}>
+                                                <TableCell className={isExpired ? 'text-gray-500 cursor-not-allowed' : ''}>{formatIST(slot.start_time)}</TableCell>
+                                                <TableCell className={isExpired ? 'text-gray-500 cursor-not-allowed' : ''}>{formatIST(slot.end_time)}</TableCell>
                                                 <TableCell>
                                                   <Button
                                                     size="sm"
+                                                    disabled={isExpired}
+                                                    variant={isExpired ? 'secondary' : 'default'}
+                                                    className={isExpired ? 'cursor-not-allowed bg-gray-200 text-gray-500 hover:bg-gray-200 hover:text-gray-500' : ''}
                                                     onClick={async () => {
+                                                      
+                                                      if (isExpired) {
+                                                        toast.error(`Cannot book this slot - Interview time has already passed. Slot was scheduled for ${formatIST(slot.start_time)} IST.`, {
+                                                          duration: 5000,
+                                                          description: 'Please select a future time slot.',
+                                                        });
+                                                        return;
+                                                      }
+
                                                       try {
                                                         await bookApplicantTimeSlot(application.applicant_id, slotData.first.panel.id, slot.id);
+                                                        toast.success('Slot booked successfully!');
                                                         fetchSlotData('first');
                                                       } catch (error: any) {
-                                                        alert(error.message || 'Failed to book slot');
+                                                        toast.error(error.message || 'Failed to book slot');
                                                       }
                                                     }}
                                                   >
-                                                    Book
+                                                    {isExpired ? 'Expired' : 'Book'}
                                                   </Button>
                                                 </TableCell>
                                               </TableRow>
-                                            ))
+                                              );
+                                            })
                                           )}
                                         </TableBody>
                                       </Table>
                                     </div>
                                   </div>
                                 )}
+                                </div>
                               </DialogContent>
                             </Dialog>
+                          </div>
+                        )}
+                        
+                        {/* Rejection Message for First Preference */}
+                        {((shouldShowResults() && application.first_pref_status === "rejected") || application.first_pref_status === "not_selected") && (
+                          <div className="mt-4">
+                            <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                              <div className="flex items-center gap-2">
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                <span>Application not selected</span>
+                              </div>
+                              <div className="text-xs text-red-300 mt-2 space-y-1">
+                                <p>We appreciate your interest in this department. While we couldn't move forward this time, we encourage you to apply again in future opportunities.</p>
+                                <p>Keep developing your skills - we hope to see you again next time! 🚀</p>
+                              </div>
+                            </div>
                           </div>
                         )}
                         </div>
@@ -981,11 +1107,11 @@ export default function ApplicantDashboard() {
                       {/* Second Preference Card */}
                       <div
                         className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
-                          application.second_pref_status === "accepted"
+                          shouldShowResults() && application.second_pref_status === "accepted"
                             ? "bg-gradient-to-br from-green-900/40 to-emerald-900/20 border-green-500/50 shadow-green-500/10"
-                            : application.second_pref_status === "rejected"
+                            : shouldShowResults() && application.second_pref_status === "rejected"
                             ? "bg-gradient-to-br from-red-900/40 to-rose-900/20 border-red-500/50 shadow-red-500/10"
-                            : application.second_pref_status === "shortlisted"
+                            : (application.second_pref_status === "shortlisted" || (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected")))
                             ? "bg-gradient-to-br from-blue-900/40 to-indigo-900/20 border-blue-500/50 shadow-blue-500/10"
                             : application.second_pref_status === "waitlisted"
                             ? "bg-gradient-to-br from-yellow-900/40 to-amber-900/20 border-yellow-500/50 shadow-yellow-500/10"
@@ -1000,11 +1126,11 @@ export default function ApplicantDashboard() {
                           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                             <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-xl ${
-                                application.second_pref_status === "accepted"
+                                shouldShowResults() && application.second_pref_status === "accepted"
                                   ? "bg-green-500/20 text-green-400"
-                                  : application.second_pref_status === "rejected"
+                                  : shouldShowResults() && application.second_pref_status === "rejected"
                                   ? "bg-red-500/20 text-red-400"
-                                  : application.second_pref_status === "shortlisted"
+                                  : (application.second_pref_status === "shortlisted" || (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected")))
                                   ? "bg-blue-500/20 text-blue-400"
                                   : application.second_pref_status === "waitlisted"
                                   ? "bg-yellow-500/20 text-yellow-400"
@@ -1014,11 +1140,11 @@ export default function ApplicantDashboard() {
                               </div>
                               <div>
                                 <span className={`text-sm font-semibold tracking-wide uppercase ${
-                                  application.second_pref_status === "accepted"
+                                  shouldShowResults() && application.second_pref_status === "accepted"
                                     ? "text-green-400"
-                                    : application.second_pref_status === "rejected"
+                                    : shouldShowResults() && application.second_pref_status === "rejected"
                                     ? "text-red-400"
-                                    : application.second_pref_status === "shortlisted"
+                                    : (application.second_pref_status === "shortlisted" || (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected")))
                                     ? "text-blue-400"
                                     : application.second_pref_status === "waitlisted"
                                     ? "text-yellow-400"
@@ -1035,11 +1161,13 @@ export default function ApplicantDashboard() {
                             {/* Status Badges */}
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge className={`text-white text-xs sm:text-sm font-medium px-3 py-1 rounded-full ${
-                                application.second_pref_status === "accepted"
+                                shouldShowResults() && application.second_pref_status === "accepted"
                                   ? "bg-green-600/80 backdrop-blur-sm"
-                                  : application.second_pref_status === "rejected"
+                                  : shouldShowResults() && application.second_pref_status === "rejected"
                                   ? "bg-red-600/80 backdrop-blur-sm"
-                                  : application.second_pref_status === "shortlisted"
+                                  : application.second_pref_status === "not_selected"
+                                  ? "bg-red-600/80 backdrop-blur-sm"
+                                  : (application.second_pref_status === "shortlisted" || (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected")))
                                   ? "bg-blue-600/80 backdrop-blur-sm"
                                   : application.second_pref_status === "waitlisted"
                                   ? "bg-yellow-600/80 backdrop-blur-sm"
@@ -1050,29 +1178,63 @@ export default function ApplicantDashboard() {
                           </div>
                           
                           {/* Content Section */}
-                          {application.second_pref_status === "shortlisted" && (
+                          {(application.second_pref_status === "shortlisted" || 
+                            (!shouldShowResults() && (application.second_pref_status === "accepted" || application.second_pref_status === "rejected"))) && (
                             <div className="mt-4">
-                              {!panelAssignments.second ? (
-                                <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                              {/* Congratulatory message for shortlisted applicants */}
+                              <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
+                                <div className="flex items-center gap-2">
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span className="font-semibold">Congratulations! 🎉</span>
+                                </div>
+                                <div className="text-xs text-green-300 mt-2">
+                                  <p>You have been shortlisted and are through to the interview round for your second preference!</p>
+                                </div>
+                              </div>
+                              
+                              {/* Show ready message only if not evaluated AND slot hasn't passed */}
+                              {!evaluationStatus.second && !hasSlotPassed(slotData.second.booking) && (
+                                <div className="text-sm text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
                                   <div className="flex items-center gap-2">
                                     <Clock className="h-4 w-4" />
-                                    <span>Wait till the shortlist period to get over</span>
+                                    <span>Ready to book slots!</span>
                                   </div>
-                                  <p className="text-xs text-amber-300 mt-1">
-                                    You'll be able to book slots once the shortlist period ends
-                                  </p>
+                                  <div className="text-xs text-blue-300 mt-2 space-y-1">
+                                    <p>• You can now book interview slots when they become available</p>
+                                    <p>• If no slots are visible, please wait for recruiters to schedule them</p>
+                                    <p>• You'll be added to the WhatsApp group soon for updates</p>
+                                  </div>
                                 </div>
-                              ) : evaluationStatus.second ? (
-                                <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                              )}
+
+                              {/* Show slot passed message if slot has passed but not yet evaluated */}
+                              {!evaluationStatus.second && hasSlotPassed(slotData.second.booking) && (
+                                <div className="text-sm text-orange-400 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-4">
                                   <div className="flex items-center gap-2">
-                                    <CheckCircle className="h-4 w-4" />
-                                    <span>Evaluation completed</span>
+                                    <Clock className="h-4 w-4" />
+                                    <span>Interview slot has passed</span>
                                   </div>
-                                  <p className="text-xs text-green-300 mt-1">
-                                    Your interview has been completed and evaluated
-                                  </p>
+                                  <div className="text-xs text-orange-300 mt-1">
+                                    <p>Your interview slot has ended. Please wait for the evaluation results.</p>
+                                  </div>
                                 </div>
-                              ) : (
+                              )}
+                              
+                              {evaluationStatus.second ? (
+                                <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <CheckCircle className="h-4 w-4" />
+                                    <span className="font-semibold">Evaluation completed</span>
+                                  </div>
+                                  <div className="text-xs text-green-300 space-y-1">
+                                    <p>✅ Your interview has been completed and evaluated</p>
+                                    <p>⏳ Please wait for the final results - we will announce them soon</p>
+                                    <p>📢 You'll be notified via email and WhatsApp when results are published</p>
+                                  </div>
+                                </div>
+                              ) : panelAssignments.second && (
                                 <>
                                   {/* Debug info for troubleshooting Join Meet button */}
                                   {slotData.second.booking && (
@@ -1092,8 +1254,8 @@ export default function ApplicantDashboard() {
                                     </a>
                                   </div>
                                 )}
-                                {/* Meet link access info */}
-                                {slotData.second.booking && (
+                                {/* Meet link access info - only show if slot hasn't passed */}
+                                {slotData.second.booking && !hasSlotPassed(slotData.second.booking) && (
                                   <div className="text-xs text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 mb-2">
                                     <div className="flex items-center gap-2">
                                       <Clock className="h-3 w-3" />
@@ -1101,21 +1263,25 @@ export default function ApplicantDashboard() {
                                     </div>
                                   </div>
                                 )}
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setOpenSlotModal('second')}
-                                  disabled={evaluationStatus.second}
-                                  className="mb-2 w-full sm:w-auto text-sm sm:text-base"
-                                >
-                                  Book/Manage Slot
-                                </Button>
+                                {/* Only show Book/Manage Slot button if slot hasn't passed */}
+                                {!hasSlotPassed(slotData.second.booking) && (
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setOpenSlotModal('second')}
+                                    disabled={evaluationStatus.second}
+                                    className="mb-2 w-full sm:w-auto text-sm sm:text-base"
+                                  >
+                                    Book/Manage Slot
+                                  </Button>
+                                )}
                               </>
                             )}
-                              <Dialog open={openSlotModal === 'second'} onOpenChange={(open) => setOpenSlotModal(open ? 'second' : null)}>
-                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg">
+                            <Dialog open={openSlotModal === 'second'} onOpenChange={(open) => setOpenSlotModal(open ? 'second' : null)}>
+                                <DialogContent className="w-[95vw] max-w-md sm:max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
                                   <DialogHeader>
                                     <DialogTitle>Second Preference Slot Booking</DialogTitle>
                                   </DialogHeader>
+                                  <div className="flex-1 overflow-y-auto space-y-4">
                                   {slotLoading.second ? (
                                     <div>Loading slots...</div>
                                   ) : slotError.second ? (
@@ -1129,8 +1295,13 @@ export default function ApplicantDashboard() {
                                 <Button
                                   variant="outline"
                                           onClick={async () => {
-                                            await cancelApplicantTimeSlot(application.applicant_id, slotData.second.booking.panel_id);
-                                            fetchSlotData('second');
+                                            try {
+                                              await cancelApplicantTimeSlot(application.applicant_id, slotData.second.booking.panel_id);
+                                              toast.success('Slot cancelled successfully!');
+                                              fetchSlotData('second');
+                                            } catch (error: any) {
+                                              toast.error(error.message || 'Failed to cancel slot');
+                                            }
                                           }}
                                           className="w-full sm:w-auto text-sm"
                                 >
@@ -1141,9 +1312,9 @@ export default function ApplicantDashboard() {
                                   ) : (
                                     <div>
                                       <div className="mb-2">Select a slot:</div>
-                                      <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                      <div className="overflow-x-auto max-h-[300px] overflow-y-auto border rounded-md -mx-4 sm:mx-0">
                                         <Table className="min-w-full">
-                                          <TableHeader>
+                                          <TableHeader className="sticky top-0 bg-background">
                                             <TableRow>
                                               <TableHead>Start</TableHead>
                                               <TableHead>End</TableHead>
@@ -1156,35 +1327,73 @@ export default function ApplicantDashboard() {
                                                 <TableCell colSpan={3}>No available slots.</TableCell>
                                               </TableRow>
                                             ) : (
-                                              slotData.second.slots.map((slot: any) => (
-                                                <TableRow key={slot.id}>
-                                                  <TableCell>{formatIST(slot.start_time)}</TableCell>
-                                                  <TableCell>{formatIST(slot.end_time)}</TableCell>
+                                              slotData.second.slots.map((slot: any) => {
+                                                const now = new Date();
+                                                const slotStartTime = new Date(slot.start_time);
+                                                const isExpired = now >= slotStartTime;
+                                                
+                                                return (
+                                                <TableRow key={slot.id} className={isExpired ? 'opacity-60 bg-gray-50/50 pointer-events-none' : 'hover:bg-muted/50'}>
+                                                  <TableCell className={isExpired ? 'text-gray-500 cursor-not-allowed' : ''}>{formatIST(slot.start_time)}</TableCell>
+                                                  <TableCell className={isExpired ? 'text-gray-500 cursor-not-allowed' : ''}>{formatIST(slot.end_time)}</TableCell>
                                                   <TableCell>
                                                     <Button
                                                       size="sm"
+                                                      disabled={isExpired}
+                                                      variant={isExpired ? 'secondary' : 'default'}
+                                                      className={isExpired ? 'cursor-not-allowed bg-gray-200 text-gray-500 hover:bg-gray-200 hover:text-gray-500' : ''}
                                                       onClick={async () => {
+                                                        
+                                                        if (isExpired) {
+                                                          toast.error(`Cannot book this slot - Interview time has already passed. Slot was scheduled for ${formatIST(slot.start_time)} IST.`, {
+                                                            duration: 5000,
+                                                            description: 'Please select a future time slot.',
+                                                          });
+                                                          return;
+                                                        }
+
                                                         try {
                                                           await bookApplicantTimeSlot(application.applicant_id, slotData.second.panel.id, slot.id);
+                                                          toast.success('Slot booked successfully!');
                                                           fetchSlotData('second');
                                                         } catch (error: any) {
-                                                          alert(error.message || 'Failed to book slot');
+                                                          toast.error(error.message || 'Failed to book slot');
                                                         }
                                                       }}
                                                     >
-                                                      Book
+                                                      {isExpired ? 'Expired' : 'Book'}
                                                     </Button>
                                                   </TableCell>
                                                 </TableRow>
-                                              ))
+                                                );
+                                              })
                                             )}
                                           </TableBody>
                                         </Table>
                                       </div>
                                     </div>
                                   )}
+                                  </div>
                                 </DialogContent>
                               </Dialog>
+                            </div>
+                          )}
+                          
+                          {/* Rejection Message for Second Preference */}
+                          {((shouldShowResults() && application.second_pref_status === "rejected") || application.second_pref_status === "not_selected") && (
+                            <div className="mt-4">
+                              <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                                <div className="flex items-center gap-2">
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                  <span>Application not selected</span>
+                                </div>
+                                <div className="text-xs text-red-300 mt-2 space-y-1">
+                                  <p>We appreciate your interest in this department. While we couldn't move forward this time, we encourage you to apply again in future opportunities.</p>
+                                  <p>Keep developing your skills - we hope to see you again next time! 🚀</p>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>

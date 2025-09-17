@@ -22,6 +22,7 @@ import {
   createPanelTimeSlot,
   updatePanelTimeSlot,
   deletePanelTimeSlot,
+  getDepartmentNameById,
   type PanelTimeSlot,
 } from "@/lib/supabase/data-fetching";
 import {
@@ -58,18 +59,43 @@ type Applicant = {
   name: string;
   email: string;
   register_no: string;
-  first_pref_dept: string;
+  first_pref_dept_id: string;
   first_pref_reason: string;
-  second_pref_dept: string;
+  second_pref_dept_id: string;
   second_pref_reason: string;
   priority_reason: string;
   portfolio_link?: string;
   created_at: string;
+  first_pref_status: "pending" | "shortlisted" | "not_selected" | "accepted" | "rejected";
+  second_pref_status: "pending" | "shortlisted" | "not_selected" | "accepted" | "rejected";
 };
 
 export default function PanelPage() {
   const { panelId }: { panelId: string } = useParams();
   const router = useRouter();
+  const getStatusBadge = (status: string) => {
+    const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
+    switch (status) {
+      case "pending":
+        return `${baseClasses} bg-gray-100 text-gray-800`;
+      case "shortlisted":
+        return `${baseClasses} bg-blue-100 text-blue-800`;
+      case "accepted":
+        return `${baseClasses} bg-green-100 text-green-800`;
+      case "rejected":
+      case "not_selected":
+        return `${baseClasses} bg-red-100 text-red-800`;
+      default:
+        return `${baseClasses} bg-gray-100 text-gray-800`;
+    }
+  };
+
+  const formatStatus = (status: string) => {
+    if (status === "not_selected") {
+      return "Rejected";
+    }
+    return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
 
   const [panelData, setPanelData] = useState<PanelData>();
   const [searchQuery, setSearchQuery] = useState("");
@@ -81,12 +107,16 @@ export default function PanelPage() {
   const [meetLink, setMeetLink] = useState<string>("");
   const [meetLinkEditable, setMeetLinkEditable] = useState(false);
   const [isTimeSlotDialogOpen, setIsTimeSlotDialogOpen] = useState(false);
-  const [timeSlots, setTimeSlots] = useState<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string })[]>([]);
+  const [timeSlots, setTimeSlots] = useState<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string; bookedByName?: string })[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotForm, setSlotForm] = useState({ start: "", end: "" });
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ start: "", end: "" });
   const [slotError, setSlotError] = useState<string | null>(null);
+  
+  
+  const [firstPrefDeptName, setFirstPrefDeptName] = useState<string>("");
+  const [secondPrefDeptName, setSecondPrefDeptName] = useState<string>("");
 
   
   const fetchTimeSlots = async () => {
@@ -103,6 +133,11 @@ export default function PanelPage() {
 
   useEffect(() => {
     if (isMarkDialogOpen && selectedApplicant?.id && panelData?.department_id) {
+      
+      setScore(null);
+      setRemark("");
+      
+      
       getApplicantMarkByRecruiter(
         selectedApplicant?.id,
         panelData?.department_id
@@ -112,8 +147,37 @@ export default function PanelPage() {
           setRemark(res.remarks);
         }
       });
+    } else if (!isMarkDialogOpen) {
+      
+      setScore(null);
+      setRemark("");
     }
-  }, [isMarkDialogOpen]);
+  }, [isMarkDialogOpen, selectedApplicant?.id, panelData?.department_id]);
+
+  
+  useEffect(() => {
+    const fetchDeptNames = async () => {
+      if (selectedApplicant) {
+        try {
+          const [first, second] = await Promise.all([
+            getDepartmentNameById(selectedApplicant.first_pref_dept_id),
+            getDepartmentNameById(selectedApplicant.second_pref_dept_id),
+          ]);
+          setFirstPrefDeptName(first || selectedApplicant.first_pref_dept_id);
+          setSecondPrefDeptName(second || selectedApplicant.second_pref_dept_id);
+        } catch (error) {
+          console.error("Error fetching department names:", error);
+          
+          setFirstPrefDeptName(selectedApplicant.first_pref_dept_id);
+          setSecondPrefDeptName(selectedApplicant.second_pref_dept_id);
+        }
+      } else {
+        setFirstPrefDeptName("");
+        setSecondPrefDeptName("");
+      }
+    };
+    fetchDeptNames();
+  }, [selectedApplicant]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -148,9 +212,16 @@ export default function PanelPage() {
     );
   }
 
-  const filteredApplicants = panelData.applicants.filter((data) =>
-    data.name.startsWith(searchQuery)
-  );
+  const filteredApplicants = panelData.applicants.filter((applicant) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return (
+      applicant.name?.toLowerCase().includes(query) ||
+      applicant.email?.toLowerCase().includes(query) ||
+      applicant.register_no?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="min-h-screen hackclub-bg page-transition overflow-x-hidden">
@@ -402,7 +473,15 @@ export default function PanelPage() {
             </CardContent>
           </Card>
 
-          <Dialog open={isMarkDialogOpen} onOpenChange={setIsMarkDialogOpen}>
+          <Dialog open={isMarkDialogOpen} onOpenChange={(open) => {
+            setIsMarkDialogOpen(open);
+            if (!open) {
+              
+              setScore(null);
+              setRemark("");
+              setSelectedApplicant(undefined);
+            }
+          }}>
             <DialogContent className="w-[95vw] max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl">Mark & Remark</DialogTitle>
@@ -466,6 +545,9 @@ export default function PanelPage() {
                     }
                     setIsMarkDialogOpen(false);
                     setSelectedApplicant(undefined);
+                    
+                    setScore(null);
+                    setRemark("");
                   }}
                   className="mt-2 w-full"
                 >
@@ -476,7 +558,15 @@ export default function PanelPage() {
           </Dialog>
 
           {/* Applicant Details Dialog */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              
+              setFirstPrefDeptName("");
+              setSecondPrefDeptName("");
+              setSelectedApplicant(undefined);
+            }
+          }}>
             <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-y-auto border-0">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl font-semibold">
@@ -508,11 +598,16 @@ export default function PanelPage() {
 
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-xs sm:text-sm font-medium">
-                        First Preference
-                      </Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-xs sm:text-sm font-medium">
+                          First Preference
+                        </Label>
+                        <span className={getStatusBadge(selectedApplicant.first_pref_status)}>
+                          {formatStatus(selectedApplicant.first_pref_status)}
+                        </span>
+                      </div>
                       <p className="text-xs sm:text-sm font-medium">
-                        {selectedApplicant.first_pref_dept}
+                        {firstPrefDeptName || selectedApplicant.first_pref_dept_id}
                       </p>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         {selectedApplicant.first_pref_reason}
@@ -520,11 +615,16 @@ export default function PanelPage() {
                     </div>
 
                     <div>
-                      <Label className="text-xs sm:text-sm font-medium">
-                        Second Preference
-                      </Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-xs sm:text-sm font-medium">
+                          Second Preference
+                        </Label>
+                        <span className={getStatusBadge(selectedApplicant.second_pref_status)}>
+                          {formatStatus(selectedApplicant.second_pref_status)}
+                        </span>
+                      </div>
                       <p className="text-xs sm:text-sm font-medium">
-                        {selectedApplicant.second_pref_dept}
+                        {secondPrefDeptName || selectedApplicant.second_pref_dept_id}
                       </p>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         {selectedApplicant.second_pref_reason}
@@ -593,15 +693,16 @@ export default function PanelPage() {
 
           {/* Time Slot Management Dialog */}
           <Dialog open={isTimeSlotDialogOpen} onOpenChange={setIsTimeSlotDialogOpen}>
-            <DialogContent className="w-[95vw] max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl">Manage Interview Time Slots</DialogTitle>
                 <DialogDescription className="text-sm sm:text-base">
                   Create, edit, or delete interview time slots for this panel. Each slot can be booked by one applicant only.
                 </DialogDescription>
               </DialogHeader>
+              <div className="flex-1 overflow-y-auto space-y-4">
               {/* Create new slot */}
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   type="datetime-local"
                   value={slotForm.start}
@@ -636,26 +737,27 @@ export default function PanelPage() {
                   Add Slot
                 </Button>
               </div>
-              {slotError && <div className="text-red-500 text-xs sm:text-sm mb-2">{slotError}</div>}
+              {slotError && <div className="text-red-500 text-xs sm:text-sm">{slotError}</div>}
               {/* List slots */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[400px] overflow-y-auto border rounded-md">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 bg-background">
                     <TableRow>
                       <TableHead className="text-xs sm:text-sm">Start</TableHead>
                       <TableHead className="text-xs sm:text-sm">End</TableHead>
                       <TableHead className="text-xs sm:text-sm">Status</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Booked By</TableHead>
                       <TableHead className="text-xs sm:text-sm">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loadingSlots ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-xs sm:text-sm">Loading...</TableCell>
+                        <TableCell colSpan={5} className="text-xs sm:text-sm">Loading...</TableCell>
                       </TableRow>
                     ) : timeSlots.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-xs sm:text-sm">No time slots yet.</TableCell>
+                        <TableCell colSpan={5} className="text-xs sm:text-sm">No time slots yet.</TableCell>
                       </TableRow>
                     ) : (
                       timeSlots.map(slot => (
@@ -667,6 +769,13 @@ export default function PanelPage() {
                               <span className="text-red-600 font-medium">Booked</span>
                             ) : (
                               <span className="text-green-600 font-medium">Available</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs sm:text-sm">
+                            {slot.isBooked && slot.bookedByName ? (
+                              <span className="text-blue-600 font-medium">{slot.bookedByName}</span>
+                            ) : (
+                              <span className="text-gray-500">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-xs sm:text-sm">
@@ -693,8 +802,11 @@ export default function PanelPage() {
                                       await updatePanelTimeSlot(slot.id, editForm.start, editForm.end);
                                       setEditingSlotId(null);
                                       fetchTimeSlots();
-                                    } catch (e) {
-                                      setSlotError("Failed to update slot");
+                                      toast.success('Time slot updated successfully!');
+                                    } catch (e: any) {
+                                      const errorMessage = e.message || "Failed to update slot";
+                                      setSlotError(errorMessage);
+                                      toast.error(errorMessage);
                                     }
                                   }}
                                 >
@@ -708,22 +820,59 @@ export default function PanelPage() {
                             ) : (
                               <>
                                 <div className="flex flex-col sm:flex-row gap-1">
-                                  <Button size="sm" variant="outline" className="text-xs sm:text-sm" onClick={() => {
-                                  setEditingSlotId(slot.id);
-                                  setEditForm({ start: slot.start_time.slice(0, 16), end: slot.end_time.slice(0, 16) });
-                                }}>
-                                  Edit
-                                </Button>
-                                  <Button size="sm" variant="destructive" className="text-xs sm:text-sm" onClick={async () => {
-                                  try {
-                                    await deletePanelTimeSlot(slot.id);
-                                    fetchTimeSlots();
-                                  } catch (e) {
-                                    setSlotError("Failed to delete slot");
-                                  }
-                                }}>
-                                  Delete
-                                </Button>
+                                  {(() => {
+                                    const now = new Date();
+                                    const slotStartTime = new Date(slot.start_time);
+                                    const isExpired = now >= slotStartTime;
+                                    const canEdit = !(slot.isBooked && isExpired);
+                                    
+                                    return (
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className={`text-xs sm:text-sm ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        disabled={!canEdit}
+                                        title={!canEdit ? "Cannot edit booked slot that has already passed" : ""}
+                                        onClick={() => {
+                                          if (!canEdit) return;
+                                          setEditingSlotId(slot.id);
+                                          setEditForm({ start: slot.start_time.slice(0, 16), end: slot.end_time.slice(0, 16) });
+                                        }}
+                                      >
+                                        Edit
+                                      </Button>
+                                    );
+                                  })()}
+                                  {(() => {
+                                    const now = new Date();
+                                    const slotStartTime = new Date(slot.start_time);
+                                    const isExpired = now >= slotStartTime;
+                                    const canDelete = !(slot.isBooked && isExpired);
+                                    
+                                    return (
+                                      <Button 
+                                        size="sm" 
+                                        variant="destructive" 
+                                        className={`text-xs sm:text-sm ${!canDelete ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        disabled={!canDelete}
+                                        title={!canDelete ? "Cannot delete booked slot that has already passed" : ""}
+                                        onClick={async () => {
+                                          if (!canDelete) return;
+                                          try {
+                                            await deletePanelTimeSlot(slot.id);
+                                            fetchTimeSlots();
+                                            toast.success('Time slot deleted successfully!');
+                                          } catch (e: any) {
+                                            const errorMessage = e.message || "Failed to delete slot";
+                                            setSlotError(errorMessage);
+                                            toast.error(errorMessage);
+                                          }
+                                        }}
+                                      >
+                                        Delete
+                                      </Button>
+                                    );
+                                  })()}
                                 </div>
                               </>
                             )}
@@ -733,6 +882,7 @@ export default function PanelPage() {
                     )}
                   </TableBody>
                 </Table>
+              </div>
               </div>
             </DialogContent>
           </Dialog>

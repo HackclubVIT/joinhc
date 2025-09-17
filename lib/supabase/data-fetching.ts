@@ -344,6 +344,42 @@ export async function getRecruiterDepartments(recruiterId: string) {
   }
 }
 
+export async function getAssignedPanelsForRecruiter(recruiterId: string) {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("recruiter_departments")
+      .select(
+        `
+        *,
+        department:departments(id, name, description),
+        panel:recruitment_panel(id, name, meet_link)
+      `
+      )
+      .eq("recruiter_id", recruiterId)
+      .not("panel_id", "is", null);
+
+    if (error) {
+      console.error("Error fetching assigned panels for recruiter:", error);
+      return [];
+    }
+
+    
+    const assignedPanels = data
+      .filter((item) => item.panel)
+      .map((item) => ({
+        ...item.panel,
+        department: item.department,
+      }));
+
+    return assignedPanels;
+  } catch (err) {
+    console.error("Error in getAssignedPanelsForRecruiter:", err);
+    return [];
+  }
+}
+
 export async function assignDepartmentToRecruiter(
   recruiterId: string,
   departmentId: string
@@ -609,6 +645,34 @@ export async function removeApplicantFromPanel(applicantId: string, preference: 
   return true;
 }
 
+
+
+export async function getAllDeadlines() {
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("application_settings")
+      .select("deadline_name, deadline")
+      .in('deadline_name', ['application', 'shortlist']);
+
+    if (error) {
+      console.error("Error fetching deadlines:", error);
+      return { applicationDeadline: null, shortlistDeadline: null };
+    }
+
+    const applicationDeadline = data?.find(d => d.deadline_name === 'application')?.deadline;
+    const shortlistDeadline = data?.find(d => d.deadline_name === 'shortlist')?.deadline;
+
+    return {
+      applicationDeadline: applicationDeadline ? { deadline: applicationDeadline } : null,
+      shortlistDeadline: shortlistDeadline ? { deadline: shortlistDeadline } : null
+    };
+  } catch (err) {
+    console.error("Error in getAllDeadlines:", err);
+    return { applicationDeadline: null, shortlistDeadline: null };
+  }
+}
 
 export async function getApplicationDeadline() {
   const supabase = createClient();
@@ -1490,6 +1554,37 @@ export const getMeetLinkByPanelId = async (panel_id: string) => {
   }
 };
 
+
+export const getMeetLinksByPanelIds = async (firstPanelId: string | null, secondPanelId: string | null) => {
+  const supabase = createClient();
+
+  try {
+    const panelIds = [firstPanelId, secondPanelId].filter(Boolean);
+    
+    if (panelIds.length === 0) {
+      return { first: null, second: null };
+    }
+
+    const { data, error } = await supabase
+      .from("recruitment_panel")
+      .select("id, meet_link")
+      .in("id", panelIds);
+
+    if (error) {
+      console.error("Error fetching meet links:", error);
+      return { first: null, second: null };
+    }
+
+    const firstLink = data?.find(p => p.id === firstPanelId)?.meet_link || null;
+    const secondLink = data?.find(p => p.id === secondPanelId)?.meet_link || null;
+
+    return { first: firstLink, second: secondLink };
+  } catch (err) {
+    console.error("Error in getMeetLinksByPanelIds:", err);
+    return { first: null, second: null };
+  }
+};
+
 export async function getDepartmentApplicants(departmentId: string) {
   const supabase = createClient();
 
@@ -1560,10 +1655,7 @@ export async function getDepartmentApplicants(departmentId: string) {
       .from("applications")
       .select("*")
       .or(
-        `first_pref_dept_id.eq.${normalizedId},second_pref_dept_id.eq.${normalizedId}`
-      )
-      .or(
-        `first_pref_status.in.(${statusFilter.join(',')}),second_pref_status.in.(${statusFilter.join(',')})`
+        `and(first_pref_dept_id.eq.${normalizedId},first_pref_status.in.(${statusFilter.join(',')})),and(second_pref_dept_id.eq.${normalizedId},second_pref_status.in.(${statusFilter.join(',')}))`
       )
       .order("created_at", { ascending: false });
 
@@ -1645,10 +1737,7 @@ export async function getDepartmentApplicantsOptimized(
       .from("applications")
       .select("*")
       .or(
-        `first_pref_dept_id.eq.${normalizedId},second_pref_dept_id.eq.${normalizedId}`
-      )
-      .or(
-        `first_pref_status.in.(${statusFilter.join(',')}),second_pref_status.in.(${statusFilter.join(',')})`
+        `and(first_pref_dept_id.eq.${normalizedId},first_pref_status.in.(${statusFilter.join(',')})),and(second_pref_dept_id.eq.${normalizedId},second_pref_status.in.(${statusFilter.join(',')}))`
       )
       .order("created_at", { ascending: false });
 
@@ -1710,6 +1799,12 @@ export async function updateApplicationStatus(
   const supabase = createClient();
 
   try {
+    
+    const resultsPublished = await areResultsPublished();
+    if (resultsPublished) {
+      throw new Error('Cannot update application status after results have been published');
+    }
+
     const updateField =
       preference === "first" ? "first_pref_status" : "second_pref_status";
 
@@ -1778,7 +1873,7 @@ export async function getPanelTimeSlots(panelId: string): Promise<PanelTimeSlot[
   return data;
 }
 
-export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promise<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string })[]> {
+export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promise<(PanelTimeSlot & { isBooked: boolean; bookedBy?: string; bookedByName?: string })[]> {
   const supabase = createClient();
   
   
@@ -1797,14 +1892,41 @@ export async function getPanelTimeSlotsWithBookingStatus(panelId: string): Promi
   if (bookingsError) throw bookingsError;
   
   
-  const bookedSlots = new Map(bookings.map((b: any) => [b.time_slot_id, b.applicant_id]));
+  const applicantIds = bookings.map((b: any) => b.applicant_id);
+  let applicantNames: { [key: string]: string } = {};
+  
+  if (applicantIds.length > 0) {
+    const { data: applications, error: applicationsError } = await supabase
+      .from('applications')
+      .select('applicant_id, name')
+      .in('applicant_id', applicantIds);
+    if (applicationsError) throw applicationsError;
+    
+    applicantNames = applications.reduce((acc: any, app: any) => {
+      acc[app.applicant_id] = app.name;
+      return acc;
+    }, {});
+  }
   
   
-  return slots.map((slot: any) => ({
-    ...slot,
-    isBooked: bookedSlots.has(slot.id),
-    bookedBy: bookedSlots.get(slot.id) || undefined
-  }));
+  const bookedSlots = new Map(bookings.map((b: any) => [
+    b.time_slot_id, 
+    { 
+      applicantId: b.applicant_id, 
+      applicantName: applicantNames[b.applicant_id] || 'Unknown'
+    }
+  ]));
+  
+  
+  return slots.map((slot: any) => {
+    const booking = bookedSlots.get(slot.id);
+    return {
+      ...slot,
+      isBooked: bookedSlots.has(slot.id),
+      bookedBy: booking?.applicantId || undefined,
+      bookedByName: booking?.applicantName || undefined
+    };
+  });
 }
 
 export async function isTimeSlotAvailable(timeSlotId: string): Promise<boolean> {
@@ -1832,6 +1954,35 @@ export async function createPanelTimeSlot(panelId: string, start_time: string, e
 
 export async function updatePanelTimeSlot(timeSlotId: string, start_time: string, end_time: string): Promise<PanelTimeSlot> {
   const supabase = createClient();
+  
+  
+  const { data: slotCheck, error: slotError } = await supabase
+    .from('panel_time_slots')
+    .select('start_time')
+    .eq('id', timeSlotId)
+    .single();
+  
+  if (slotError) throw new Error('Time slot not found');
+  
+  
+  const { data: booking, error: bookingError } = await supabase
+    .from('applicant_time_slot')
+    .select('id')
+    .eq('time_slot_id', timeSlotId)
+    .single();
+  
+  
+  if (booking && !bookingError) {
+    const now = new Date();
+    const slotStartTime = new Date(slotCheck.start_time);
+    const isExpired = now >= slotStartTime;
+    
+    if (isExpired) {
+      throw new Error('Cannot edit booked slot that has already passed');
+    }
+  }
+  
+  
   const { data, error } = await supabase
     .from('panel_time_slots')
     .update({ start_time, end_time, updated_at: new Date().toISOString() })
@@ -1844,6 +1995,35 @@ export async function updatePanelTimeSlot(timeSlotId: string, start_time: string
 
 export async function deletePanelTimeSlot(timeSlotId: string): Promise<boolean> {
   const supabase = createClient();
+  
+  
+  const { data: slotCheck, error: slotError } = await supabase
+    .from('panel_time_slots')
+    .select('start_time')
+    .eq('id', timeSlotId)
+    .single();
+  
+  if (slotError) throw new Error('Time slot not found');
+  
+  
+  const { data: booking, error: bookingError } = await supabase
+    .from('applicant_time_slot')
+    .select('id')
+    .eq('time_slot_id', timeSlotId)
+    .single();
+  
+  
+  if (booking && !bookingError) {
+    const now = new Date();
+    const slotStartTime = new Date(slotCheck.start_time);
+    const isExpired = now >= slotStartTime;
+    
+    if (isExpired) {
+      throw new Error('Cannot delete booked slot that has already passed');
+    }
+  }
+  
+  
   const { error } = await supabase
     .from('panel_time_slots')
     .delete()
@@ -1893,9 +2073,53 @@ export async function bookApplicantTimeSlot(applicantId: string, panelId: string
   const supabase = createClient();
   
   
+  const { data: slotData, error: slotError } = await supabase
+    .from('panel_time_slots')
+    .select('start_time, end_time')
+    .eq('id', timeSlotId)
+    .single();
+  
+  if (slotError) throw new Error('Time slot not found');
+  
+  
+  const { data: timeCheck, error: timeError } = await supabase
+    .rpc('is_slot_expired', { slot_id: timeSlotId });
+  
+  if (timeError) {
+    
+    
+    console.warn('is_slot_expired function not available, skipping time check:', timeError);
+  } else if (timeCheck) {
+    throw new Error('Time slot has already passed');
+  }
+  
+  
+  const { data: deptData, error: deptError } = await supabase
+    .from('recruitment_panel')
+    .select('department_id')
+    .eq('id', panelId)
+    .single();
+  
+  if (deptError) throw new Error('Panel not found');
+  
+  
+  const { data: appData, error: appError } = await supabase
+    .from('applications')
+    .select('id')
+    .eq('applicant_id', applicantId)
+    .single();
+  
+  if (appError) throw new Error('Application not found');
+  
+  const isEvaluated = await isApplicantEvaluated(appData.id, deptData.department_id);
+  if (isEvaluated) {
+    throw new Error('Cannot book slot - interview already completed and evaluated');
+  }
+  
+  
   const isAvailable = await isTimeSlotAvailable(timeSlotId);
   if (!isAvailable) {
-    throw new Error('Time slot is already booked');
+    throw new Error('Time slot is already booked by another applicant');
   }
   
   
@@ -1909,15 +2133,28 @@ export async function bookApplicantTimeSlot(applicantId: string, panelId: string
   if (checkError && checkError.code !== 'PGRST116') throw checkError;
   
   if (existingBooking) {
-    throw new Error('Applicant already has a booking for this panel');
+    throw new Error('You already have a booking for this panel');
   }
+  
   
   const { data, error } = await supabase
     .from('applicant_time_slot')
-    .insert({ applicant_id: applicantId, panel_id: panelId, time_slot_id: timeSlotId, updated_at: new Date().toISOString() })
+    .insert({ 
+      applicant_id: applicantId, 
+      panel_id: panelId, 
+      time_slot_id: timeSlotId, 
+      updated_at: new Date().toISOString() 
+    })
     .select()
     .single();
-  if (error) throw error;
+  
+  if (error) {
+    if (error.code === '23505') { 
+      throw new Error('Time slot was just booked by another applicant');
+    }
+    throw error;
+  }
+  
   return data;
 }
 
@@ -1952,6 +2189,32 @@ export async function getResultsPublicationDeadline() {
   
   if (error && error.code !== 'PGRST116') throw error;
   return data?.deadline ? new Date(data.deadline) : null;
+}
+
+export async function areResultsPublished(): Promise<boolean> {
+  const supabase = createClient();
+  try {
+    const { data, error } = await supabase
+      .from('application_settings')
+      .select('deadline')
+      .eq('deadline_name', 'results_publication')
+      .single();
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error checking results publication status:', error);
+      return false;
+    }
+    
+    if (!data?.deadline) return false;
+    
+    const publicationDate = new Date(data.deadline);
+    const now = new Date();
+    
+    return now >= publicationDate;
+  } catch (err) {
+    console.error('Error in areResultsPublished:', err);
+    return false;
+  }
 }
 
 export async function publishResults() {
@@ -2081,5 +2344,144 @@ export async function getPendingApplicantsForExport() {
   } catch (error) {
     console.error('Error in getPendingApplicantsForExport:', error);
     throw error;
+  }
+}
+
+
+export async function getRecruiterDashboardDataOptimized(
+  recruiterId: string,
+  appDeadline: { deadline: string } | null,
+  shortlistDeadline: { deadline: string } | null
+) {
+  const supabase = createClient();
+
+  try {
+    
+    const { data: recruiterDepts, error: deptError } = await supabase
+      .from("recruiter_departments")
+      .select(`
+        *,
+        department:departments(id, name, description)
+      `)
+      .eq("recruiter_id", recruiterId);
+
+    if (deptError) {
+      console.error("Error fetching recruiter departments:", deptError);
+      return { departments: [], panels: [] };
+    }
+
+    if (!recruiterDepts || recruiterDepts.length === 0) {
+      return { departments: [], panels: [] };
+    }
+
+    
+    const departmentIds = recruiterDepts
+      .map(dept => dept.department?.id || dept.department_id)
+      .filter(Boolean);
+
+    
+    let applicationsQuery = supabase
+      .from('applications')
+      .select('*')
+      .or(
+        departmentIds.map(id => 
+          `first_pref_dept_id.eq.${id},second_pref_dept_id.eq.${id}`
+        ).join(',')
+      );
+
+    
+    if (appDeadline) {
+      applicationsQuery = applicationsQuery.lte('created_at', appDeadline.deadline);
+    }
+
+    const { data: allApplications, error: appError } = await applicationsQuery;
+
+    if (appError) {
+      console.error("Error fetching applications:", appError);
+      return { departments: [], panels: [] };
+    }
+
+    
+    const { data: userPanelData, error: userPanelError } = await supabase
+      .from("recruiter_departments")
+      .select("panel: recruitment_panel(id, name)")
+      .eq("recruiter_id", recruiterId)
+      .not("panel_id", "is", null);
+
+    let panels: any[] = [];
+    if (!userPanelError && userPanelData) {
+      panels = userPanelData.map((e) => e.panel as unknown as { id: string; name: string }).filter(Boolean);
+    }
+
+    
+    const departmentStats = recruiterDepts.map(dept => {
+      const deptId = dept.department?.id || dept.department_id;
+      const deptApplications = (allApplications || []).filter(app => 
+        app.first_pref_dept_id === deptId || app.second_pref_dept_id === deptId
+      );
+
+      
+      const totalApplicants = deptApplications.length;
+      const firstPrefCount = deptApplications.filter(app => app.first_pref_dept_id === deptId).length;
+      const secondPrefCount = deptApplications.filter(app => app.second_pref_dept_id === deptId).length;
+
+      let pendingCount = 0;
+      let shortlistedCount = 0;
+      let rejectedCount = 0;
+      let acceptedCount = 0;
+
+      deptApplications.forEach(app => {
+        const isFirstPref = app.first_pref_dept_id === deptId;
+        const isSecondPref = app.second_pref_dept_id === deptId;
+
+        let status = null;
+        if (isFirstPref) {
+          status = app.first_pref_status;
+        } else if (isSecondPref) {
+          status = app.second_pref_status;
+        }
+
+        if (status) {
+          switch (status) {
+            case "pending":
+              pendingCount++;
+              break;
+            case "shortlisted":
+              shortlistedCount++;
+              break;
+            case "rejected":
+            case "not_selected":
+              rejectedCount++;
+              break;
+            case "accepted":
+              acceptedCount++;
+              break;
+          }
+        }
+      });
+
+      return {
+        id: deptId,
+        name: dept.department?.name || "Unknown Department",
+        role: dept.role,
+        totalApplicants,
+        firstPrefCount,
+        secondPrefCount,
+        pendingCount,
+        shortlistedCount,
+        rejectedCount,
+        acceptedCount,
+        panel_id: dept.panel_id
+      };
+    });
+
+    return {
+      departments: departmentStats,
+      panels: panels || []
+    };
+
+  } catch (error) {
+    console.error("Error in getRecruiterDashboardDataOptimized:", error);
+    return { departments: [], panels: [] };
   }
 }

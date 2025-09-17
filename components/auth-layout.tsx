@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { HackClubLogo } from "@/components/hackclub-logo"
-import { getRecruiterDepartments, getPanelByDepartment, isCurrentUserRecruiterOrEvaluator, getShortlistDeadline } from "@/lib/supabase/data-fetching";
+import { getRecruiterDepartments, getPanelByDepartment, isCurrentUserRecruiterOrEvaluator, getShortlistDeadline, getAssignedPanelsForRecruiter } from "@/lib/supabase/data-fetching";
 interface AuthLayoutProps {
   children: React.ReactNode
 }
@@ -50,16 +50,9 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           const depts = await getRecruiterDepartments(user.id);
           setRecruiterDepartments(depts);
           
-          const allPanels: any[] = [];
-          for (const dept of depts) {
-            const panels = await getPanelByDepartment(dept.department_id);
-            if (panels && panels.length > 0) {
-              for (const panel of panels) {
-                allPanels.push({ ...panel, department: dept.department });
-              }
-            }
-          }
-          setRecruiterPanels(allPanels);
+          
+          const assignedPanels = await getAssignedPanelsForRecruiter(user.id);
+          setRecruiterPanels(assignedPanels);
         } else {
           setRecruiterDepartments([]);
           setRecruiterPanels([]);
