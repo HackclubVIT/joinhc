@@ -47,61 +47,25 @@ CREATE TABLE IF NOT EXISTS public.applicant_time_slot (
     CONSTRAINT unique_time_slot UNIQUE(time_slot_id)
 );
 
-
-
 CREATE EXTENSION IF NOT EXISTS "pg_graphql" WITH SCHEMA "graphql";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
-
-
-
-
-
 
 CREATE TYPE "public"."Recruiter Roles" AS ENUM (
     'recruiter',
     'evaluator'
 );
 
-
 ALTER TYPE "public"."Recruiter Roles" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."user_role" AS ENUM (
     'applicant',
     'recruiter',
     'admin'
 );
 
-
 ALTER TYPE "public"."user_role" OWNER TO "postgres";
-
 
 CREATE OR REPLACE FUNCTION "public"."create_profile_on_signup"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -130,7 +94,6 @@ BEGIN
 
 ALTER FUNCTION "public"."create_profile_on_signup"() OWNER TO "postgres";
 
-
 CREATE OR REPLACE FUNCTION "public"."get_user_email"("user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "text"
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -140,9 +103,7 @@ CREATE OR REPLACE FUNCTION "public"."get_user_email"("user_id" "uuid" DEFAULT "a
                                                                                                     WHERE id = user_id;
                                                                                                     $$;
 
-
 ALTER FUNCTION "public"."get_user_email"("user_id" "uuid") OWNER TO "postgres";
-
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -168,16 +129,16 @@ CREATE OR REPLACE FUNCTION "public"."handle_role_change"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-                                                                                                                BEGIN
-                                                                                                                    -- If role changed to recruiter, ensure they have a record in recruiter_departments
-                                                                                                                        IF NEW.role = 'recruiter' AND (OLD.role IS NULL OR OLD.role != 'recruiter') THEN
-                                                                                                                                INSERT INTO recruiter_departments (recruiter_id, department_id)
-                                                                                                                                        VALUES (NEW.id, NULL);
-                                                                                                                                            END IF;
-                                                                                                                                                
-                                                                                                                                                    RETURN NEW;
-                                                                                                                                                    END;
-                                                                                                                                                    $$;
+    BEGIN
+        -- If role changed to recruiter, ensure they have a record in recruiter_departments
+            IF NEW.role = 'recruiter' AND (OLD.role IS NULL OR OLD.role != 'recruiter') THEN
+                    INSERT INTO recruiter_departments (recruiter_id, department_id)
+                            VALUES (NEW.id, NULL);
+                                END IF;
+                                    
+                                        RETURN NEW;
+                                        END;
+                                        $$;
 
 
 ALTER FUNCTION "public"."handle_role_change"() OWNER TO "postgres";
@@ -202,17 +163,17 @@ CREATE OR REPLACE FUNCTION "public"."update_user_role"("user_email" "text", "new
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-                                                                                                                                                                                    DECLARE 
-                                                                                                                                                                                        success BOOLEAN;
-                                                                                                                                                                                        BEGIN
-                                                                                                                                                                                            UPDATE public.profiles
-                                                                                                                                                                                                SET role = new_role, updated_at = NOW()
-                                                                                                                                                                                                    WHERE email = user_email;
-                                                                                                                                                                                                        
-                                                                                                                                                                                                            GET DIAGNOSTICS success = ROW_COUNT;
-                                                                                                                                                                                                                RETURN success > 0;
-                                                                                                                                                                                                                END;
-                                                                                                                                                                                                                $$;
+        DECLARE 
+            success BOOLEAN;
+            BEGIN
+                UPDATE public.profiles
+                    SET role = new_role, updated_at = NOW()
+                        WHERE email = user_email;
+                            
+                                GET DIAGNOSTICS success = ROW_COUNT;
+                                    RETURN success > 0;
+                                    END;
+                                    $$;
 
 
 ALTER FUNCTION "public"."update_user_role"("user_email" "text", "new_role" "text") OWNER TO "postgres";
@@ -222,17 +183,17 @@ CREATE OR REPLACE FUNCTION "public"."update_user_role"("user_id" "uuid", "new_ro
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-                                                                                                                                                                                                                DECLARE 
-                                                                                                                                                                                                                    success BOOLEAN;
-                                                                                                                                                                                                                    BEGIN
-                                                                                                                                                                                                                        UPDATE public.profiles
-                                                                                                                                                                                                                            SET role = new_role, updated_at = NOW()
-                                                                                                                                                                                                                                WHERE id = user_id;
-                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                        GET DIAGNOSTICS success = ROW_COUNT;
-                                                                                                                                                                                                                                            RETURN success > 0;
-                                                                                                                                                                                                                                            END;
-                                                                                                                                                                                                                                            $$;
+        DECLARE 
+            success BOOLEAN;
+            BEGIN
+                UPDATE public.profiles
+                    SET role = new_role, updated_at = NOW()
+                        WHERE id = user_id;
+                            
+                                GET DIAGNOSTICS success = ROW_COUNT;
+                                    RETURN success > 0;
+                                    END;
+                                    $$;
 
 
 ALTER FUNCTION "public"."update_user_role"("user_id" "uuid", "new_role" "text") OWNER TO "postgres";
