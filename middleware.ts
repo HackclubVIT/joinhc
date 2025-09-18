@@ -27,145 +27,150 @@ export async function middleware(request: NextRequest) {
   )
 
   try {
-    const { data: { user } } = await supabase.auth.getUser()
 
-    if (
-      request.nextUrl.pathname.startsWith("/dashboard") ||
-      request.nextUrl.pathname.startsWith("/application") ||
-      request.nextUrl.pathname.startsWith("/profile") ||
-      request.nextUrl.pathname.startsWith("/admin")
-    ) {
-      if (!user) {
-        const redirectUrl = new URL("/login", request.url)
-        redirectUrl.searchParams.set("redirect", request.nextUrl.pathname)
-        return NextResponse.redirect(redirectUrl)
-      }
-      
-      
-      if (request.nextUrl.pathname.startsWith("/admin")) {
-        try {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .single()
-          
-          if (profileData?.role !== "admin") {
-            
-            const redirectPath = profileData?.role === "recruiter" ? "/dashboard/recruiter" : "/dashboard"
-            return NextResponse.redirect(new URL(redirectPath, request.url))
-          }
-        } catch (error) {
-          console.error("Error checking admin role:", error)
-          return NextResponse.redirect(new URL("/dashboard", request.url))
-        }
-      }
-      
-      
-      if (request.nextUrl.pathname.startsWith("/application")) {
-        try {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .single()
-          
-          if (profileData?.role !== "applicant") {
-            
-            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard/recruiter"
-            return NextResponse.redirect(new URL(redirectPath, request.url))
-          }
-        } catch (error) {
-          console.error("Error checking applicant role:", error)
-          return NextResponse.redirect(new URL("/dashboard", request.url))
-        }
-      }
-      
-      
-      if (request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
-        try {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .single()
-          
-          if (profileData?.role !== "recruiter") {
-            
-            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard"
-            return NextResponse.redirect(new URL(redirectPath, request.url))
-          }
-        } catch (error) {
-          console.error("Error checking recruiter role:", error)
-          return NextResponse.redirect(new URL("/dashboard", request.url))
-        }
-      }
-      
-      
-      if (request.nextUrl.pathname === "/dashboard" && !request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
-        try {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .single()
-          
-          if (profileData?.role !== "applicant") {
-            
-            const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard/recruiter"
-            return NextResponse.redirect(new URL(redirectPath, request.url))
-          }
-        } catch (error) {
-          console.error("Error checking applicant dashboard role:", error)
-        }
-      }
+    if (url.pathname !== "/") {
+      return NextResponse.redirect(new URL("/", request.url));
     }
 
-    
-    if (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register") {
-      if (user) {
-        try {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .single()
+    // const { data: { user } } = await supabase.auth.getUser()
+
+    // if (
+    //   request.nextUrl.pathname.startsWith("/dashboard") ||
+    //   request.nextUrl.pathname.startsWith("/application") ||
+    //   request.nextUrl.pathname.startsWith("/profile") ||
+    //   request.nextUrl.pathname.startsWith("/admin")
+    // ) {
+    //   if (!user) {
+    //     const redirectUrl = new URL("/login", request.url)
+    //     redirectUrl.searchParams.set("redirect", request.nextUrl.pathname)
+    //     return NextResponse.redirect(redirectUrl)
+    //   }
+      
+      
+    //   if (request.nextUrl.pathname.startsWith("/admin")) {
+    //     try {
+    //       const { data: profileData } = await supabase
+    //         .from("profiles")
+    //         .select("role")
+    //         .eq("id", user.id)
+    //         .single()
           
-          const role = profileData?.role;
-          let redirectPath = "/dashboard"
+    //       if (profileData?.role !== "admin") {
+            
+    //         const redirectPath = profileData?.role === "recruiter" ? "/dashboard/recruiter" : "/dashboard"
+    //         return NextResponse.redirect(new URL(redirectPath, request.url))
+    //       }
+    //     } catch (error) {
+    //       console.error("Error checking admin role:", error)
+    //       return NextResponse.redirect(new URL("/dashboard", request.url))
+    //     }
+    //   }
+      
+      
+    //   if (request.nextUrl.pathname.startsWith("/application")) {
+    //     try {
+    //       const { data: profileData } = await supabase
+    //         .from("profiles")
+    //         .select("role")
+    //         .eq("id", user.id)
+    //         .single()
           
-          if (role === "admin") {
-            redirectPath = "/admin"
-          } else if (role === "recruiter") {
-            redirectPath = "/dashboard/recruiter"
-          }
+    //       if (profileData?.role !== "applicant") {
+            
+    //         const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard/recruiter"
+    //         return NextResponse.redirect(new URL(redirectPath, request.url))
+    //       }
+    //     } catch (error) {
+    //       console.error("Error checking applicant role:", error)
+    //       return NextResponse.redirect(new URL("/dashboard", request.url))
+    //     }
+    //   }
+      
+      
+    //   if (request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
+    //     try {
+    //       const { data: profileData } = await supabase
+    //         .from("profiles")
+    //         .select("role")
+    //         .eq("id", user.id)
+    //         .single()
           
-          return NextResponse.redirect(new URL(redirectPath, request.url))
-        } catch (error) {
-          console.error("Error checking role for auth redirect:", error)
-          return NextResponse.redirect(new URL("/dashboard", request.url))
-        }
-      }
-    }
+    //       if (profileData?.role !== "recruiter") {
+            
+    //         const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard"
+    //         return NextResponse.redirect(new URL(redirectPath, request.url))
+    //       }
+    //     } catch (error) {
+    //       console.error("Error checking recruiter role:", error)
+    //       return NextResponse.redirect(new URL("/dashboard", request.url))
+    //     }
+    //   }
+      
+      
+    //   if (request.nextUrl.pathname === "/dashboard" && !request.nextUrl.pathname.startsWith("/dashboard/recruiter")) {
+    //     try {
+    //       const { data: profileData } = await supabase
+    //         .from("profiles")
+    //         .select("role")
+    //         .eq("id", user.id)
+    //         .single()
+          
+    //       if (profileData?.role !== "applicant") {
+            
+    //         const redirectPath = profileData?.role === "admin" ? "/admin" : "/dashboard/recruiter"
+    //         return NextResponse.redirect(new URL(redirectPath, request.url))
+    //       }
+    //     } catch (error) {
+    //       console.error("Error checking applicant dashboard role:", error)
+    //     }
+    //   }
+    // }
 
     
-    if (request.nextUrl.pathname === "/dashboard" && user) {
-      try {
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single()
+    // if (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register") {
+    //   if (user) {
+    //     try {
+    //       const { data: profileData } = await supabase
+    //         .from("profiles")
+    //         .select("role")
+    //         .eq("id", user.id)
+    //         .single()
+          
+    //       const role = profileData?.role;
+    //       let redirectPath = "/dashboard"
+          
+    //       if (role === "admin") {
+    //         redirectPath = "/admin"
+    //       } else if (role === "recruiter") {
+    //         redirectPath = "/dashboard/recruiter"
+    //       }
+          
+    //       return NextResponse.redirect(new URL(redirectPath, request.url))
+    //     } catch (error) {
+    //       console.error("Error checking role for auth redirect:", error)
+    //       return NextResponse.redirect(new URL("/dashboard", request.url))
+    //     }
+    //   }
+    // }
+
+    
+    // if (request.nextUrl.pathname === "/dashboard" && user) {
+    //   try {
+    //     const { data: profileData } = await supabase
+    //       .from("profiles")
+    //       .select("role")
+    //       .eq("id", user.id)
+    //       .single()
         
-        if (profileData?.role === "recruiter") {
-          return NextResponse.redirect(new URL("/dashboard/recruiter", request.url))
-        } else if (profileData?.role === "admin") {
-          return NextResponse.redirect(new URL("/admin", request.url))
-        }
-      } catch (error) {
-        console.error("Error checking role for applicant dashboard:", error)
-      }
-    }
+    //     if (profileData?.role === "recruiter") {
+    //       return NextResponse.redirect(new URL("/dashboard/recruiter", request.url))
+    //     } else if (profileData?.role === "admin") {
+    //       return NextResponse.redirect(new URL("/admin", request.url))
+    //     }
+    //   } catch (error) {
+    //     console.error("Error checking role for applicant dashboard:", error)
+    //   }
+    // }
   } catch (error) {
     console.error("Middleware error:", error)
   }
