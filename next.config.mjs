@@ -1,10 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    swcTraceProfiling: true,
-  },
   serverExternalPackages: ['@supabase/ssr'],
-  // Security headers for production
   async headers() {
     return [
       {
@@ -25,9 +21,6 @@ const nextConfig = {
         ],
       },
     ]
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
